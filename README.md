@@ -64,9 +64,3 @@ MuaraKu mengintegrasikan teknologi *Artificial Intelligence* pada inti operasiny
 
 Pastikan kamu sudah menginstal **Node.js** (v18+) dan **npm/pnpm/yarn**.
 
-### Installasi
-
-1. **Clone repository ini:**
-   ```bash
-   git clone [https://github.com/username/muaraku.id.git](https://github.com/username/muaraku.id.git)
-   cd muaraku.id
