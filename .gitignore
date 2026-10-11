@@ -1,0 +1,17 @@
+# Environment dan konfigurasi rahasia
+.env
+.env.*
+!.env.example
+
+# Dependencies
+/vendor/
+/node_modules/
+
+# File sementara
+*.log
+.DS_Store
+Thumbs.db
+
+# File editor
+.vscode/
+.idea/

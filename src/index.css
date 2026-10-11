@@ -1,0 +1,487 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-warm-canvas text-on-surface antialiased font-sans selection:bg-orange-500/20 selection:text-orange-950;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Smooth scroll behavior */
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Material Symbols */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  vertical-align: middle;
+}
+
+/* =========================================================================
+   APPLE & PREMIUM SAAS AMBIENT BACKGROUND & SURFACE TREATMENT
+   ========================================================================= */
+
+/* Subtle Tactical Dot Pattern Grid (Linear / Stripe / Apple developer vibe) */
+.bg-dot-pattern {
+  background-image: radial-gradient(rgba(24, 24, 27, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.dark .bg-dot-pattern {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Apple-style Layered Ambient Glow Radii */
+.bg-hero-glow-light {
+  background: radial-gradient(circle 800px at 50% -10%, rgba(251, 146, 60, 0.12), rgba(255, 252, 248, 0) 70%),
+              radial-gradient(circle 600px at 80% 20%, rgba(254, 215, 170, 0.1), rgba(255, 252, 248, 0) 60%),
+              radial-gradient(circle 500px at 20% 30%, rgba(251, 146, 60, 0.06), rgba(255, 252, 248, 0) 50%);
+}
+.dark .bg-hero-glow-dark {
+  background: radial-gradient(circle 800px at 50% -10%, rgba(251, 146, 60, 0.14), rgba(24, 24, 27, 0) 70%),
+              radial-gradient(circle 600px at 80% 20%, rgba(234, 88, 12, 0.08), rgba(24, 24, 27, 0) 60%),
+              radial-gradient(circle 500px at 20% 30%, rgba(251, 146, 60, 0.05), rgba(24, 24, 27, 0) 50%);
+}
+
+/* Frosted Glassmorphic Surfaces with Apple-like Inner Sheen */
+.glass-surface {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(228, 228, 231, 0.7);
+  box-shadow: 0 4px 20px -2px rgba(24, 24, 27, 0.03), 
+              inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+}
+.dark .glass-surface {
+  background: rgba(39, 39, 42, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4), 
+              inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Header Glassmorphism */
+.glass-header {
+  background: rgba(255, 252, 248, 0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(228, 228, 231, 0.6);
+}
+.dark .glass-header {
+  background: rgba(24, 24, 27, 0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(63, 63, 70, 0.4);
+}
+
+/* Apple-style Interactive Card Elevation */
+.card-elevation {
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-elevation:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 36px -10px rgba(251, 146, 60, 0.14),
+              0 4px 12px -2px rgba(24, 24, 27, 0.04);
+  border-color: rgba(251, 146, 60, 0.4);
+}
+.dark .card-elevation:hover {
+  box-shadow: 0 16px 36px -10px rgba(251, 146, 60, 0.18),
+              0 4px 12px -2px rgba(0, 0, 0, 0.5);
+  border-color: rgba(251, 146, 60, 0.35);
+}
+
+/* Refined Subtle Inner Shadow/Border Light */
+.inner-light {
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.7);
+}
+.dark .inner-light {
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Custom Scrollbar styled like macOS */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(228, 228, 231, 0.8);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(161, 161, 170, 0.9);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(63, 63, 70, 0.8);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(113, 113, 122, 0.9);
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* =========================================================================
+   ENHANCED LIGHT MODE — PREMIUM APPLE-INSPIRED 2026
+   ========================================================================= */
+
+/* Light mode layered gradient background */
+.bg-premium-canvas {
+  background: 
+    linear-gradient(135deg, rgba(255, 252, 248, 1) 0%, rgba(255, 247, 237, 0.5) 25%, rgba(255, 252, 248, 1) 50%, rgba(246, 242, 247, 0.4) 75%, rgba(255, 252, 248, 1) 100%);
+}
+.dark .bg-premium-canvas {
+  background: #18181B;
+}
+
+/* Mesh gradient for hero sections */
+.bg-mesh-gradient {
+  background:
+    radial-gradient(at 20% 20%, rgba(251, 146, 60, 0.08) 0%, transparent 50%),
+    radial-gradient(at 80% 0%, rgba(254, 215, 170, 0.12) 0%, transparent 50%),
+    radial-gradient(at 50% 80%, rgba(251, 146, 60, 0.05) 0%, transparent 50%),
+    radial-gradient(at 0% 50%, rgba(246, 242, 247, 0.6) 0%, transparent 50%);
+}
+.dark .bg-mesh-gradient {
+  background:
+    radial-gradient(at 20% 20%, rgba(251, 146, 60, 0.06) 0%, transparent 50%),
+    radial-gradient(at 80% 0%, rgba(234, 88, 12, 0.05) 0%, transparent 50%),
+    radial-gradient(at 50% 80%, rgba(251, 146, 60, 0.03) 0%, transparent 50%);
+}
+
+/* Premium card with subtle gradient border */
+.card-premium {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(228, 228, 231, 0.6);
+  box-shadow: 
+    0 1px 3px rgba(24, 24, 27, 0.04),
+    0 8px 24px -4px rgba(24, 24, 27, 0.06),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-premium:hover {
+  box-shadow:
+    0 1px 3px rgba(24, 24, 27, 0.04),
+    0 16px 40px -8px rgba(251, 146, 60, 0.12),
+    0 8px 16px -4px rgba(24, 24, 27, 0.06),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+  border-color: rgba(251, 146, 60, 0.3);
+  transform: translateY(-2px);
+}
+.dark .card-premium {
+  background: rgba(39, 39, 42, 0.8);
+  border-color: rgba(63, 63, 70, 0.5);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.3),
+    0 8px 24px -4px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+.dark .card-premium:hover {
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.3),
+    0 16px 40px -8px rgba(251, 146, 60, 0.15),
+    0 8px 16px -4px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+  border-color: rgba(251, 146, 60, 0.3);
+}
+
+/* Premium input fields */
+.input-premium {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(228, 228, 231, 0.8);
+  box-shadow: inset 0 1px 2px rgba(24, 24, 27, 0.04), 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.input-premium:focus {
+  border-color: rgba(251, 146, 60, 0.6);
+  box-shadow: inset 0 1px 2px rgba(24, 24, 27, 0.04), 0 0 0 3px rgba(251, 146, 60, 0.12);
+}
+.dark .input-premium {
+  background: rgba(24, 24, 27, 0.8);
+  border-color: rgba(63, 63, 70, 0.8);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.dark .input-premium:focus {
+  border-color: rgba(251, 146, 60, 0.5);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(251, 146, 60, 0.15);
+}
+
+/* Premium button with glow */
+.btn-premium {
+  background: linear-gradient(135deg, #FB923C 0%, #F59E0B 50%, #FB923C 100%);
+  background-size: 200% 200%;
+  box-shadow: 0 4px 16px -2px rgba(251, 146, 60, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-premium:hover {
+  background-position: 100% 100%;
+  box-shadow: 0 8px 24px -4px rgba(251, 146, 60, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+.btn-premium:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Section divider with gradient */
+.divider-gradient {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(228, 228, 231, 0.8), rgba(251, 146, 60, 0.2), rgba(228, 228, 231, 0.8), transparent);
+}
+.dark .divider-gradient {
+  background: linear-gradient(90deg, transparent, rgba(63, 63, 70, 0.8), rgba(251, 146, 60, 0.15), rgba(63, 63, 70, 0.8), transparent);
+}
+
+/* Shimmer loading animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, rgba(228,228,231,0.3) 25%, rgba(228,228,231,0.6) 50%, rgba(228,228,231,0.3) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+.dark .shimmer {
+  background: linear-gradient(90deg, rgba(63,63,70,0.3) 25%, rgba(63,63,70,0.6) 50%, rgba(63,63,70,0.3) 75%);
+  background-size: 200% 100%;
+}
+
+/* Floating animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Fade in up animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Staggered animation delays */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+
+/* Enhanced glass header for light mode */
+.glass-header-premium {
+  background: rgba(255, 252, 248, 0.75);
+  backdrop-filter: blur(30px) saturate(1.5);
+  -webkit-backdrop-filter: blur(30px) saturate(1.5);
+  border-bottom: 1px solid rgba(228, 228, 231, 0.5);
+  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.03), 0 4px 20px rgba(24, 24, 27, 0.02);
+}
+.dark .glass-header-premium {
+  background: rgba(24, 24, 27, 0.75);
+  backdrop-filter: blur(30px) saturate(1.5);
+  -webkit-backdrop-filter: blur(30px) saturate(1.5);
+  border-bottom: 1px solid rgba(63, 63, 70, 0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Tag / Badge styling */
+.badge-glow {
+  box-shadow: 0 0 12px rgba(251, 146, 60, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Smooth page transition */
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-page-in {
+  animation: pageIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* =========================================================================
+   2026 DIGITAL PRODUCT DESIGN SYSTEM — LINEAR, APPLE & AWWWARDS STYLING
+   ========================================================================= */
+
+/* Subtle Geometric Grid Lines (Linear / Vercel Developer Aesthetic) */
+.bg-grid-pattern {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(24, 24, 27, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(24, 24, 27, 0.04) 1px, transparent 1px);
+}
+.dark .bg-grid-pattern {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+}
+
+/* Linear-style Masked Radial Grid */
+.bg-grid-fade {
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, black 40%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, black 40%, transparent 80%);
+}
+
+/* Micro Noise Texture Overlay for Rich Tactile Surfaces */
+.bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.035'/%3E%3C/svg%3E");
+}
+.dark .bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+}
+
+/* Floating Island Glassmorphism (Dynamic Floating Pill Bar) */
+.glass-island {
+  background: rgba(255, 252, 248, 0.82);
+  backdrop-filter: blur(28px) saturate(1.6);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  border: 1px solid rgba(228, 228, 231, 0.8);
+  box-shadow: 
+    0 10px 30px -5px rgba(24, 24, 27, 0.06),
+    0 2px 6px -1px rgba(24, 24, 27, 0.04),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+}
+.dark .glass-island {
+  background: rgba(24, 24, 27, 0.82);
+  backdrop-filter: blur(28px) saturate(1.6);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  box-shadow: 
+    0 10px 30px -5px rgba(0, 0, 0, 0.5),
+    0 2px 6px -1px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Bento Card Style with Ambient Depth */
+.bento-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(228, 228, 231, 0.7);
+  box-shadow: 
+    0 1px 2px rgba(24, 24, 27, 0.03),
+    0 8px 24px -4px rgba(24, 24, 27, 0.04),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95);
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.bento-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(251, 146, 60, 0.35);
+  box-shadow: 
+    0 1px 2px rgba(24, 24, 27, 0.03),
+    0 16px 40px -6px rgba(251, 146, 60, 0.12),
+    0 4px 12px -2px rgba(24, 24, 27, 0.04),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95);
+}
+.dark .bento-card {
+  background: rgba(30, 30, 34, 0.85);
+  border-color: rgba(63, 63, 70, 0.55);
+  box-shadow: 
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 8px 24px -4px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+.dark .bento-card:hover {
+  border-color: rgba(251, 146, 60, 0.4);
+  box-shadow: 
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 16px 40px -6px rgba(251, 146, 60, 0.18),
+    0 4px 12px -2px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Expressive Gradient Typography */
+.text-gradient-orange {
+  background: linear-gradient(135deg, #EA580C 0%, #FB923C 50%, #F59E0B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.dark .text-gradient-orange {
+  background: linear-gradient(135deg, #FB923C 0%, #FDBA74 50%, #F59E0B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-silver {
+  background: linear-gradient(135deg, #18181B 0%, #52525B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.dark .text-gradient-silver {
+  background: linear-gradient(135deg, #FFFFFF 0%, #A1A1AA 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Glowing Border Accent */
+.glow-border {
+  position: relative;
+}
+.glow-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(251, 146, 60, 0.5), transparent 60%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Radar Pulse Wave Animation */
+@keyframes radarSweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.animate-radar {
+  animation: radarSweep 4s linear infinite;
+}
+
+/* Breathing Ambient Light Glow */
+@keyframes ambientBreathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.06); }
+}
+.animate-breathe {
+  animation: ambientBreathe 8s ease-in-out infinite;
+}
