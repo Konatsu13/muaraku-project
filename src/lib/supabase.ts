@@ -10,32 +10,14 @@ import {
   User 
 } from '../types';
 
-const getEnvVar = (key: string): string => {
-  if (typeof process !== 'undefined' && process.env && process.env[key]) {
-    return process.env[key] as string;
-  }
-  try {
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
-      // @ts-ignore
-      return import.meta.env[key];
-    }
-  } catch {
-    // ignore
-  }
-  return '';
-};
-
 const supabaseUrl = 
-  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SUPABASE_URL) ||
-  getEnvVar('NEXT_PUBLIC_SUPABASE_URL') || 
-  getEnvVar('VITE_SUPABASE_URL');
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 
+  'https://inxqwzbptfcuqapzqmwh.supabase.co';
 
 const supabaseAnonKey = 
-  (typeof process !== 'undefined' && (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)) ||
-  getEnvVar('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY') || 
-  getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY') || 
-  getEnvVar('VITE_SUPABASE_ANON_KEY');
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+  'sb_publishable_aFlXWG_Erv0bVeWpA6Zxpw_Snu4gfzF';
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
