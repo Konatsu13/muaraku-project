@@ -82,23 +82,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="flex items-center gap-2.5 text-left group min-w-0"
             title="Kembali ke Eksplorasi"
           >
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-orange-500/15 to-amber-500/15 border border-primary-container/30 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-xs">
-              <svg viewBox="0 0 32 32" fill="none" className="w-6 h-6" xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M7 19C5.34315 19 4 20.3431 4 22C4 23.6569 5.34315 25 7 25C8.65685 25 10 23.6569 10 22L12.5 13.5L16 20.5L19.5 13.5L22 22C22 23.6569 23.3431 25 25 25C26.6569 25 28 23.6569 28 22C28 20.3431 26.6569 19 25 19"
-                  stroke="#FB923C"
-                  strokeWidth="2.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle cx="16" cy="7.5" r="3" stroke="#FB923C" strokeWidth="2.5" />
-                <path
-                  d="M13.5 13C14.2 11.8 15 11 16 11C17 11 17.8 11.8 18.5 13"
-                  stroke="#FB923C"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-orange-500/15 via-amber-500/10 to-orange-400/20 dark:from-orange-500/20 dark:via-amber-500/15 dark:to-orange-400/25 border border-primary-container/30 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-sm p-1.5">
+              <img src="/logo.svg" alt="MuaraKu" className="w-full h-full object-contain" />
             </div>
             {!isCollapsed && (
               <div className="flex flex-col min-w-0">

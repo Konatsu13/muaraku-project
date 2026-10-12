@@ -98,17 +98,8 @@ export const App: React.FC = () => {
         <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] pointer-events-none z-0 rounded-full bg-orange-400/15 blur-3xl animate-pulse" />
         
         <div className="relative z-10 flex flex-col items-center space-y-4 text-center animate-fade-in-up">
-          <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-orange-500 via-amber-500 to-orange-400 flex items-center justify-center text-white shadow-xl shadow-orange-500/30 ring-4 ring-white/60 dark:ring-white/10 animate-pulse">
-            <svg viewBox="0 0 32 32" fill="none" className="w-9 h-9" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M7 19C5.34315 19 4 20.3431 4 22C4 23.6569 5.34315 25 7 25C8.65685 25 10 23.6569 10 22L12.5 13.5L16 20.5L19.5 13.5L22 22C22 23.6569 23.3431 25 25 25C26.6569 25 28 23.6569 28 22C28 20.3431 26.6569 19 25 19"
-                stroke="white"
-                strokeWidth="2.75"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <circle cx="16" cy="7.5" r="3" stroke="white" strokeWidth="2.5" />
-            </svg>
+          <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-orange-500/15 via-amber-500/10 to-orange-400/20 dark:from-orange-500/20 dark:via-amber-500/15 dark:to-orange-400/25 border border-primary-container/30 flex items-center justify-center p-2.5 shadow-xl shadow-orange-500/30 ring-4 ring-white/60 dark:ring-white/10 animate-pulse">
+            <img src="/logo.svg" alt="MuaraKu" className="w-full h-full object-contain filter drop-shadow-md" />
           </div>
           <div className="space-y-1">
             <h1 className="font-headline-md text-xl font-bold tracking-tight text-on-surface dark:text-surface-white">

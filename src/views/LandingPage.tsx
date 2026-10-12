@@ -151,23 +151,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, onOpenRepo
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           {/* Logo Lockup */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => onNavigate('home')}>
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-orange-500 via-amber-500 to-orange-400 flex items-center justify-center text-white shadow-md shadow-orange-500/25 ring-1 ring-white/20">
-              <svg viewBox="0 0 32 32" fill="none" className="w-6 h-6" xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M7 19C5.34315 19 4 20.3431 4 22C4 23.6569 5.34315 25 7 25C8.65685 25 10 23.6569 10 22L12.5 13.5L16 20.5L19.5 13.5L22 22C22 23.6569 23.3431 25 25 25C26.6569 25 28 23.6569 28 22C28 20.3431 26.6569 19 25 19"
-                  stroke="white"
-                  strokeWidth="2.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle cx="16" cy="7.5" r="3" stroke="white" strokeWidth="2.5" />
-                <path
-                  d="M13.5 13C14.2 11.8 15 11 16 11C17 11 17.8 11.8 18.5 13"
-                  stroke="white"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-orange-500/15 via-amber-500/10 to-orange-400/20 dark:from-orange-500/20 dark:via-amber-500/15 dark:to-orange-400/25 border border-primary-container/30 flex items-center justify-center p-1.5 shadow-sm shadow-orange-500/15 ring-1 ring-white/50 dark:ring-white/10">
+              <img src="/logo.svg" alt="MuaraKu" className="w-full h-full object-contain" />
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">
@@ -1112,16 +1097,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, onOpenRepo
             {/* Col 1: Brand Info */}
             <div className="md:col-span-2 space-y-3.5">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center text-white text-xs font-bold shadow-xs">
-                  <svg viewBox="0 0 32 32" fill="none" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M7 19C5.34315 19 4 20.3431 4 22C4 23.6569 5.34315 25 7 25C8.65685 25 10 23.6569 10 22L12.5 13.5L16 20.5L19.5 13.5L22 22C22 23.6569 23.3431 25 25 25C26.6569 25 28 23.6569 28 22C28 20.3431 26.6569 19 25 19"
-                      stroke="white"
-                      strokeWidth="2.75"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-orange-500/15 via-amber-500/10 to-orange-400/20 border border-primary-container/30 flex items-center justify-center p-1 shadow-xs">
+                  <img src="/logo.svg" alt="MuaraKu" className="w-full h-full object-contain" />
                 </div>
                 <div className="flex flex-col">
                   <span className="font-extrabold text-base text-on-surface dark:text-surface-white">

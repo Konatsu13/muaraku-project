@@ -88,8 +88,8 @@ export const AppShell: React.FC<{ children: ReactNode }> = ({ children }) => {
         <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] pointer-events-none z-0 rounded-full bg-orange-400/15 blur-3xl animate-pulse" />
         
         <div className="relative z-10 flex flex-col items-center space-y-4 text-center animate-fade-in-up">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center shadow-glow-orange ring-1 ring-white/30 animate-bounce">
-            <span className="material-symbols-outlined text-white text-3xl">location_searching</span>
+          <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-orange-500/15 via-amber-500/10 to-orange-400/20 dark:from-orange-500/20 dark:via-amber-500/15 dark:to-orange-400/25 border border-primary-container/30 flex items-center justify-center p-2.5 shadow-glow-orange ring-1 ring-white/30 animate-bounce">
+            <img src="/logo.svg" alt="MuaraKu" className="w-full h-full object-contain filter drop-shadow-md" />
           </div>
           <div className="space-y-1">
             <h1 className="text-xl font-bold tracking-tight text-on-surface dark:text-white">

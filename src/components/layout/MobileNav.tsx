@@ -76,17 +76,8 @@ export const MobileNav: React.FC<MobileNavProps> = ({
       {/* Mobile Top Header */}
       <div className="md:hidden sticky top-0 z-20 bg-surface-white/85 dark:bg-dark-surface/85 backdrop-blur-xl px-4 py-3 border-b border-border-subtle/80 dark:border-white/10 flex items-center justify-between shadow-xs">
         <button onClick={() => onNavigate('landing')} className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center text-white shadow-xs">
-            <svg viewBox="0 0 32 32" fill="none" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M7 19C5.34315 19 4 20.3431 4 22C4 23.6569 5.34315 25 7 25C8.65685 25 10 23.6569 10 22L12.5 13.5L16 20.5L19.5 13.5L22 22C22 23.6569 23.3431 25 25 25C26.6569 25 28 23.6569 28 22C28 20.3431 26.6569 19 25 19"
-                stroke="white"
-                strokeWidth="2.75"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <circle cx="16" cy="7.5" r="3" stroke="white" strokeWidth="2.5" />
-            </svg>
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-500/15 via-amber-500/10 to-orange-400/20 border border-primary-container/30 flex items-center justify-center p-1 shadow-xs">
+            <img src="/logo.svg" alt="MuaraKu" className="w-full h-full object-contain" />
           </div>
           <span className="font-headline-sm text-base font-bold text-on-surface dark:text-surface-white">
             MuaraKu
