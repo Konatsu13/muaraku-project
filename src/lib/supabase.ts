@@ -10,11 +10,32 @@ import {
   User 
 } from '../types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
+const getEnvVar = (key: string): string => {
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key] as string;
+  }
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+      // @ts-ignore
+      return import.meta.env[key];
+    }
+  } catch {
+    // ignore
+  }
+  return '';
+};
+
+const supabaseUrl = 
+  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SUPABASE_URL) ||
+  getEnvVar('NEXT_PUBLIC_SUPABASE_URL') || 
+  getEnvVar('VITE_SUPABASE_URL');
+
 const supabaseAnonKey = 
-  import.meta.env.VITE_SUPABASE_ANON_KEY || 
-  import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  (typeof process !== 'undefined' && (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)) ||
+  getEnvVar('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY') || 
+  getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY') || 
+  getEnvVar('VITE_SUPABASE_ANON_KEY');
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 

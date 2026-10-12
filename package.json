@@ -4,12 +4,16 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "vite:dev": "vite",
+    "vite:build": "tsc && vite build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
+    "@types/node": "^26.6.5",
+    "next": "^14.2.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

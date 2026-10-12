@@ -7,6 +7,11 @@
 /vendor/
 /node_modules/
 
+# Next.js & Build outputs
+.next/
+out/
+dist/
+
 # File sementara
 *.log
 .DS_Store

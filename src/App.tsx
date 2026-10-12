@@ -10,20 +10,20 @@ import { ModerationModal } from './components/modals/ModerationModal';
 import { MuaraAiAssistant } from './components/ai/MuaraAiAssistant';
 
 // Pages
-import { DiscoverFeed } from './pages/DiscoverFeed';
-import { SeekerPage } from './pages/SeekerPage';
-import { FinderPage } from './pages/FinderPage';
-import { SearchPage } from './pages/SearchPage';
-import { ReportDetailPage } from './pages/ReportDetailPage';
-import { GlobalChatPage } from './pages/GlobalChatPage';
-import { PrivateMessagesPage } from './pages/PrivateMessagesPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { SettingsPage } from './pages/SettingsPage';
-import { SupportPage } from './pages/SupportPage';
-import { AdminDashboardPage } from './pages/AdminDashboardPage';
-import { LoginPage } from './pages/LoginPage';
-import { SignupPage } from './pages/SignupPage';
-import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { DiscoverFeed } from './views/DiscoverFeed';
+import { SeekerPage } from './views/SeekerPage';
+import { FinderPage } from './views/FinderPage';
+import { SearchPage } from './views/SearchPage';
+import { ReportDetailPage } from './views/ReportDetailPage';
+import { GlobalChatPage } from './views/GlobalChatPage';
+import { PrivateMessagesPage } from './views/PrivateMessagesPage';
+import { ProfilePage } from './views/ProfilePage';
+import { SettingsPage } from './views/SettingsPage';
+import { SupportPage } from './views/SupportPage';
+import { AdminDashboardPage } from './views/AdminDashboardPage';
+import { LoginPage } from './views/LoginPage';
+import { SignupPage } from './views/SignupPage';
+import { ForgotPasswordPage } from './views/ForgotPasswordPage';
 import { Report } from './types';
 
 export const App: React.FC = () => {
