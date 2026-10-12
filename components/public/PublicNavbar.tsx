@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -10,6 +11,7 @@ import {
   Compass,
   Sun,
   Moon,
+  Laptop,
   Globe,
   LogIn,
   LayoutDashboard,
@@ -25,7 +27,10 @@ export function PublicNavbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
+    // Cycle: system -> dark -> light -> system
+    if (theme === "system") setTheme("dark");
+    else if (theme === "dark") setTheme("light");
+    else setTheme("system");
   };
 
   const toggleLocale = () => {
@@ -43,8 +48,14 @@ export function PublicNavbar() {
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         {/* Brand Lockup */}
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center text-white shadow-sm transition-transform group-hover:scale-105">
-            <span className="text-xl font-black tracking-tight">M</span>
+          <div className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center p-1.5 shadow-xs transition-transform group-hover:scale-105 border border-orange-500/20">
+            <Image
+              src="/logo.svg"
+              alt="MuaraKu Logo"
+              width={26}
+              height={26}
+              className="object-contain"
+            />
           </div>
           <div className="flex flex-col">
             <span className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -92,9 +103,17 @@ export function PublicNavbar() {
           <button
             onClick={toggleTheme}
             className="p-2 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700"
-            title="Ubah Tema"
+            title={
+              theme === "system"
+                ? "Tema: Sistem (Klik untuk Gelap)"
+                : theme === "dark"
+                ? "Tema: Gelap (Klik untuk Terang)"
+                : "Tema: Terang (Klik untuk Sistem)"
+            }
           >
-            {theme === "dark" ? (
+            {theme === "system" ? (
+              <Laptop className="w-4 h-4 text-orange-500" />
+            ) : theme === "dark" ? (
               <Sun className="w-4 h-4 text-amber-400" />
             ) : (
               <Moon className="w-4 h-4 text-zinc-600" />

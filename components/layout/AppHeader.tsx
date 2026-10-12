@@ -11,6 +11,7 @@ import {
   Bell,
   Sun,
   Moon,
+  Laptop,
   Globe,
   Menu,
   Plus,
@@ -41,7 +42,9 @@ export function AppHeader({ onToggleMobileMenu, onOpenReportModal }: AppHeaderPr
   }, [router]);
 
   const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
+    if (theme === "system") setTheme("dark");
+    else if (theme === "dark") setTheme("light");
+    else setTheme("system");
   };
 
   const toggleLocale = () => {
@@ -119,9 +122,17 @@ export function AppHeader({ onToggleMobileMenu, onOpenReportModal }: AppHeaderPr
         <button
           onClick={toggleTheme}
           className="p-2 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-          title="Ubah Tema"
+          title={
+            theme === "system"
+              ? "Tema: Sistem (Klik untuk Gelap)"
+              : theme === "dark"
+              ? "Tema: Gelap (Klik untuk Terang)"
+              : "Tema: Terang (Klik untuk Sistem)"
+          }
         >
-          {theme === "dark" ? (
+          {theme === "system" ? (
+            <Laptop className="w-4 h-4 text-orange-500" />
+          ) : theme === "dark" ? (
             <Sun className="w-4 h-4 text-amber-400" />
           ) : (
             <Moon className="w-4 h-4 text-zinc-600" />

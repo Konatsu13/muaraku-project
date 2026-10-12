@@ -2,8 +2,9 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useI18n } from "@/lib/i18n";
-import { ShieldCheck, Heart } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 
 export function PublicFooter() {
   const { t } = useI18n();
@@ -15,8 +16,14 @@ export function PublicFooter() {
           {/* Col 1: Brand Info */}
           <div className="md:col-span-2 space-y-3">
             <Link href="/" className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-orange-500 flex items-center justify-center text-white font-black text-lg">
-                M
+              <div className="w-8 h-8 rounded-xl bg-orange-500/10 flex items-center justify-center p-1.5 border border-orange-500/20">
+                <Image
+                  src="/logo.svg"
+                  alt="MuaraKu Logo"
+                  width={22}
+                  height={22}
+                  className="object-contain"
+                />
               </div>
               <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
                 MuaraKu (.id)

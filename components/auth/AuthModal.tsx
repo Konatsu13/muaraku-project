@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useId } from "react";
+import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
@@ -21,10 +23,20 @@ import {
 } from "lucide-react";
 
 export function AuthModal() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { authModalView, closeAuthModal, openAuthModal, pendingEmail, setPendingEmail } = useAuth();
   const { t, locale } = useI18n();
   const supabase = createClient();
   const termsCheckboxId = useId();
+
+  const getSafeReturnUrl = () => {
+    const next = searchParams.get("next");
+    if (next && next.startsWith("/") && !next.startsWith("//")) {
+      return next;
+    }
+    return "/app";
+  };
 
   const [email, setEmail] = useState("");
   const [prevPendingEmail, setPrevPendingEmail] = useState<string | null>(null);
@@ -102,6 +114,8 @@ export function AuthModal() {
         setErrorMsg(error.message);
       } else {
         closeAuthModal();
+        const destination = getSafeReturnUrl();
+        router.push(destination);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Terjadi kesalahan autentikasi";
@@ -115,7 +129,8 @@ export function AuthModal() {
     setErrorMsg(null);
     setOauthLoading(true);
     try {
-      const redirectTo = `${window.location.origin}/app`;
+      const destination = getSafeReturnUrl();
+      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(destination)}`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -140,20 +155,12 @@ export function AuthModal() {
     setErrorMsg(null);
 
     if (!termsAgreed) {
-      setErrorMsg(
-        locale === "en"
-          ? "Please agree to the Terms of Service and Privacy Policy first."
-          : "Mohon setujui Ketentuan Layanan dan Kebijakan Privasi terlebih dahulu."
-      );
+      setErrorMsg(t.auth.terms_agree_error);
       return;
     }
 
     if (password.length < 8) {
-      setErrorMsg(
-        locale === "en"
-          ? "Password must be at least 8 characters long."
-          : "Kata sandi harus minimal 8 karakter."
-      );
+      setErrorMsg(t.auth.password_min_error);
       return;
     }
 
@@ -179,6 +186,8 @@ export function AuthModal() {
         setCooldown(60);
         if (data.session) {
           closeAuthModal();
+          const destination = getSafeReturnUrl();
+          router.push(destination);
         } else {
           openAuthModal("otp");
         }
@@ -214,16 +223,14 @@ export function AuthModal() {
         });
 
         if (err2) {
-          setErrorMsg(
-            locale === "en"
-              ? "Invalid or expired verification code. Please check the latest code in your inbox or request a new code."
-              : "Kode verifikasi tidak valid atau telah kedaluwarsa. Mohon masukkan kode terbaru atau kirim ulang kode."
-          );
+          setErrorMsg(t.auth.invalid_otp_error);
           return;
         }
       }
 
       closeAuthModal();
+      const destination = getSafeReturnUrl();
+      router.push(destination);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Gagal memverifikasi kode OTP";
       setErrorMsg(msg);
@@ -304,8 +311,14 @@ export function AuthModal() {
 
         {/* Brand Header */}
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center mb-3 text-orange-500">
-            <span className="text-2xl font-black tracking-tighter">M</span>
+          <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center mb-3 p-2">
+            <Image
+              src="/logo.svg"
+              alt="MuaraKu Logo"
+              width={36}
+              height={36}
+              className="object-contain"
+            />
           </div>
           <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 tracking-tight">
             {authModalView === "otp"
@@ -377,19 +390,19 @@ export function AuthModal() {
           </div>
         )}
 
-        {/* OAuth Button for Login & Register */}
+        {/* OAuth Button for Login & Register with Near-Black Hover Transition */}
         {(authModalView === "login" || authModalView === "register") && (
           <div className="mb-5 space-y-4">
             <button
               type="button"
               onClick={handleGoogleOAuth}
               disabled={loading || oauthLoading}
-              className="w-full h-11 px-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-750 text-zinc-800 dark:text-zinc-100 font-semibold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-3 shadow-2xs transition-all active:scale-[0.99] disabled:opacity-50"
+              className="w-full h-11 px-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-900 hover:border-zinc-900 hover:text-white dark:hover:bg-zinc-950 dark:hover:border-zinc-950 dark:hover:text-white text-zinc-800 dark:text-zinc-100 font-semibold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-3 shadow-2xs transition-colors duration-200 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50 group motion-reduce:transition-none"
             >
               {oauthLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
               ) : (
-                <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" aria-hidden="true">
                   <path
                     fill="#4285F4"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -408,17 +421,17 @@ export function AuthModal() {
                   />
                 </svg>
               )}
-              <span>
+              <span className="transition-colors group-hover:text-white">
                 {authModalView === "login"
-                  ? locale === "en" ? "Sign in with Google" : "Masuk dengan Google"
-                  : locale === "en" ? "Sign up with Google" : "Daftar dengan Google"}
+                  ? t.auth.google_signin
+                  : t.auth.google_signup}
               </span>
             </button>
 
             <div className="relative flex items-center justify-center">
               <div className="border-t border-zinc-200 dark:border-zinc-800 w-full" />
               <span className="bg-white dark:bg-zinc-900 px-3 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                {locale === "en" ? "or with email" : "atau dengan email"}
+                {t.auth.or_with_email}
               </span>
             </div>
           </div>

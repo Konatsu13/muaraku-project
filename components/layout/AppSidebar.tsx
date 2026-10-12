@@ -2,6 +2,7 @@
 
 import React, { useSyncExternalStore } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -143,8 +144,14 @@ export function AppSidebar({
           {/* Brand & Collapse Header */}
           <div className={`flex items-center justify-between px-1 py-1 ${collapsed ? "flex-col gap-3" : ""}`}>
             <Link href="/" className="flex items-center gap-2.5 group">
-              <div className="w-8 h-8 rounded-xl bg-orange-500 flex items-center justify-center text-white font-black text-lg shadow-sm transition-transform group-hover:scale-105">
-                M
+              <div className="w-8 h-8 rounded-xl bg-orange-500/10 flex items-center justify-center p-1.5 shadow-xs transition-transform group-hover:scale-105 border border-orange-500/20">
+                <Image
+                  src="/logo.svg"
+                  alt="MuaraKu Logo"
+                  width={22}
+                  height={22}
+                  className="object-contain"
+                />
               </div>
               {!collapsed && (
                 <div className="flex flex-col">

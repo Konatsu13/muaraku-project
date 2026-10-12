@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
@@ -37,8 +38,14 @@ export default function AppLayout({
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#FFFCF8] dark:bg-[#18181B] text-zinc-900 dark:text-zinc-100">
-        <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center mb-4">
-          <span className="text-2xl font-black text-orange-500">M</span>
+        <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center mb-4 p-2 border border-orange-500/20">
+          <Image
+            src="/logo.svg"
+            alt="MuaraKu Logo"
+            width={32}
+            height={32}
+            className="object-contain"
+          />
         </div>
         <div className="flex items-center gap-2 text-sm text-zinc-500">
           <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
