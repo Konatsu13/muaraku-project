@@ -10,6 +10,8 @@ import {
   ShieldCheck,
   ChevronRight,
   Sparkles,
+  Search,
+  Package,
 } from "lucide-react";
 
 export interface ReportItem {
@@ -37,7 +39,7 @@ export function ReportCard({ report, onChatClick }: ReportCardProps) {
   const isLost = report.type === "lost";
 
   return (
-    <div className="group bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col">
+    <div className="group bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-750 rounded-3xl overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col">
       {/* Photo Area (16:10 aspect ratio) */}
       <div className="relative aspect-[16/10] bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
         {report.image_url ? (
@@ -47,9 +49,11 @@ export function ReportCard({ report, onChatClick }: ReportCardProps) {
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-800/60 p-4">
-            <span className="text-4xl mb-2">{isLost ? "🔍" : "📦"}</span>
-            <span className="text-xs font-medium">Foto barang privat / tidak diunggah</span>
+          <div className="w-full h-full flex flex-col items-center justify-center text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-850 p-4">
+            <div className="w-12 h-12 rounded-2xl bg-zinc-200/70 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 mb-2">
+              {isLost ? <Search className="w-6 h-6 text-orange-500" /> : <Package className="w-6 h-6 text-emerald-500" />}
+            </div>
+            <span className="text-[11px] font-semibold text-zinc-400">Foto barang tidak dilampirkan</span>
           </div>
         )}
 

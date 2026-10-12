@@ -1,18 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { ReportCard, ReportItem } from "@/components/reports/ReportCard";
-import { initialSampleReports } from "@/lib/data/sampleReports";
+import { fetchReports } from "@/lib/supabase/reports";
 import { useI18n } from "@/lib/i18n";
 import {
   Search,
   Sparkles,
-  Filter,
   X,
-  SlidersHorizontal,
-  Calendar,
-  MapPin,
-  Tag,
+  Loader2,
 } from "lucide-react";
 
 export default function SearchPage() {
@@ -22,7 +18,8 @@ export default function SearchPage() {
   const [filterType, setFilterType] = useState<"all" | "lost" | "found">("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterVerifiedOnly, setFilterVerifiedOnly] = useState(false);
-  const [showFilters, setShowFilters] = useState(true);
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const sampleKeywords = [
     t.search.chip_1,
@@ -31,11 +28,24 @@ export default function SearchPage() {
     t.search.chip_4,
   ];
 
-  const searchResults = initialSampleReports.filter((report) => {
-    // Type filter
-    if (filterType === "lost" && report.type !== "lost") return false;
-    if (filterType === "found" && report.type !== "found") return false;
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const res = await fetchReports({
+      type: filterType,
+      search_query: query,
+    });
+    setReports(res.data || []);
+    setLoading(false);
+  }, [filterType, query]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadData();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [loadData]);
+
+  const searchResults = reports.filter((report) => {
     // Category filter
     if (filterCategory !== "all") {
       if (!report.category.toLowerCase().includes(filterCategory.toLowerCase()))
@@ -44,16 +54,6 @@ export default function SearchPage() {
 
     // Verified staff only
     if (filterVerifiedOnly && !report.is_verified_staff) return false;
-
-    // Query filter
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      const matchTitle = report.title.toLowerCase().includes(q);
-      const matchDesc = report.description.toLowerCase().includes(q);
-      const matchLoc = report.location_name.toLowerCase().includes(q);
-      const matchCat = report.category.toLowerCase().includes(q);
-      return matchTitle || matchDesc || matchLoc || matchCat;
-    }
 
     return true;
   });
@@ -72,7 +72,7 @@ export default function SearchPage() {
         <div className="space-y-1">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-500/10 text-orange-600 dark:text-orange-400">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Natural Language Search (N2L Engine)</span>
+            <span>Pencarian Cerdas MuaraKu</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
             {t.search.title}
@@ -96,6 +96,7 @@ export default function SearchPage() {
             <button
               onClick={() => setQuery("")}
               className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              aria-label="Hapus kata kunci pencarian"
             >
               <X className="w-4 h-4" />
             </button>
@@ -104,7 +105,7 @@ export default function SearchPage() {
 
         {/* Suggestion Chips */}
         <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-          <span className="text-zinc-400 font-medium">Contoh:</span>
+          <span className="text-zinc-400 font-medium">Contoh kata kunci:</span>
           {sampleKeywords.map((kw, i) => (
             <button
               key={i}
@@ -203,8 +204,13 @@ export default function SearchPage() {
         </p>
       </div>
 
-      {/* Results Grid */}
-      {searchResults.length > 0 ? (
+      {/* Loading & Results Grid */}
+      {loading ? (
+        <div className="py-20 flex flex-col items-center justify-center space-y-3">
+          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+          <p className="text-xs text-zinc-500">Mencari laporan...</p>
+        </div>
+      ) : searchResults.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {searchResults.map((report) => (
             <ReportCard key={report.id} report={report} />

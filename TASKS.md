@@ -20,134 +20,73 @@ Legend:
 ---
 
 ## Fase 2: Design Tokens, i18n & Context Providers
-- [ ] Konfigurasi Tailwind v4 & Design Tokens di `globals.css` (Warm Canvas `#FFFCF8`, Muara Orange `#FB923C`, Verified Yellow `#EAB308`, Dark Canvas `#18181B`)
-- [ ] Client Supabase SSR & Browser Helper (`lib/supabase/client.ts`, `lib/supabase/server.ts`)
-- [ ] Sistem Internasionalisasi (i18n) Bilingual (`id` & `en`) dengan React Context (`lib/i18n/`)
-- [ ] Theme Provider (`light`, `dark`, `system`) dengan persistensi
-- [ ] Auth Provider (`AuthProvider`, `useAuth`) mengelola sesi Supabase, user_profiles, account controls, dan roles
-- [ ] Mock / Seed data provider untuk demonstration bila user belum login
+- [x] Konfigurasi Tailwind v4 & Design Tokens di `globals.css` (Warm Canvas `#FFFCF8`, Muara Orange `#FB923C`, Verified Yellow `#EAB308`, Dark Canvas `#18181B`)
+- [x] Client Supabase SSR & Browser Helper (`lib/supabase/client.ts`, `lib/supabase/server.ts`) dengan dual-key support (`PUBLISHABLE_KEY` dan `ANON_KEY`)
+- [x] Sistem Internasionalisasi (i18n) Bilingual (`id` & `en`) dengan React Context (`lib/i18n/`)
+- [x] Theme Provider (`light`, `dark`, `system`) dengan persistensi lokal dan profil
+- [x] Auth Provider (`AuthProvider`, `useAuth`) mengelola sesi Supabase, user_profiles, gender, account controls, dan roles
+- [x] Database Migration non-destruktif: `20261012_add_gender_to_user_profiles.sql`
 
 ---
 
 ## Fase 3: Public Website & Shared Layouts
-- [ ] Public Navigation Bar (`Home`, `About`, `Support`, CTA Masuk/Daftar)
-- [ ] Public Footer (`Privacy Policy`, `Terms of Service`, copyright)
-- [ ] Landing Page (`/`):
-  - [ ] Hero dengan ilustrasi/preview kartu kehilangan & penemuan
-  - [ ] Pilihan peran Seeker vs Finder ("Bagaimana Cara Kerja")
-  - [ ] Live / Contextual Preview Discover Feed
-  - [ ] Fitur AI (Natural Language Search & AI Matching preview)
-  - [ ] Prinsip Keamanan & Privasi Komunitas
-  - [ ] FAQ interaktif & Final CTA
-- [ ] Halaman Tentang Kami (`/about`)
-- [ ] Halaman Bantuan & Dukungan Publik (`/support`)
-- [ ] Halaman Kebijakan Privasi (`/privacy`)
-- [ ] Halaman Syarat Ketentuan (`/terms`)
+- [x] Public Navigation Bar (`Home`, `About`, `Support`, CTA Masuk/Daftar) dengan responsive mobile menu
+- [x] Public Footer (`Privacy Policy`, `Terms of Service`, copyright)
+- [x] Landing Page (`/`):
+  - [x] Hero dengan alur pencarian cerdas tanpa data palsu / persentase manipulatif
+  - [x] Interactive product workflow preview berlabel simulasi transparan
+  - [x] Pilihan peran Seeker vs Finder ("Dua Pilar Ekosistem")
+  - [x] Live Preview Discover Feed terhubung langsung ke database Supabase riil dengan genuine empty state
+  - [x] Bento grid infrastruktur sipil (N2L, Verified Staff, Anti-Tebusan, Privasi Maksimal)
+  - [x] FAQ interaktif akordeon & Final CTA Banner
+- [x] Halaman Tentang Kami (`/about`)
+- [x] Halaman Bantuan & Dukungan Publik (`/support`)
+- [x] Halaman Kebijakan Privasi (`/privacy`)
+- [x] Halaman Syarat Ketentuan (`/terms`)
 
 ---
 
-## Fase 4: App Shell, Sidebar & Navigation
-- [ ] App Shell Layout (`/app/layout.tsx`) dengan header & responsive sidebar
-- [ ] Komponen Sidebar (`components/layout/AppSidebar.tsx`):
-  - [ ] Brand lockup dengan logo MuaraKu
-  - [ ] Mode Desktop Expanded (240px) vs Collapsed (76px)
-  - [ ] Mode Mobile Drawer / Bottom navigation bar
-  - [ ] Item Navigasi Utama: Discover, Seeker, Finder, Search, Global Chat, Messages
-  - [ ] Item Navigasi Sekunder: Profile, Settings, Help & Support, Admin (jika staf)
-  - [ ] Shortcut keyboard `⌘F` menuju halaman Search
-- [ ] Top Header Bar:
-  - [ ] Quick Search trigger
-  - [ ] Notification Bell dengan unread indicator
-  - [ ] Language toggle switcher (`ID` / `EN`)
-  - [ ] Theme mode toggle (`Light` / `Dark`)
-  - [ ] User avatar pill & dropdown menu
+## Fase 4: App Shell, Sidebar & Route Protection (P0)
+- [x] Route Protection Middleware (`middleware.ts`) mengamankan `/app/*` dan `/admin/*` dengan redirect login cerdas
+- [x] App Shell Layout (`/app/layout.tsx`) dengan header & responsive sidebar + client session verification
+- [x] Admin Role Guard (`/admin/page.tsx`) membatasi akses hanya untuk pengguna berstatus admin atau moderator
+- [x] Komponen Sidebar (`components/layout/AppSidebar.tsx`):
+  - [x] Brand lockup dengan logo MuaraKu
+  - [x] Mode Desktop Expanded (240px) vs Collapsed (76px)
+  - [x] Mode Mobile Drawer / Bottom navigation bar
+  - [x] Item Navigasi Utama: Discover, Seeker, Finder, Search, Global Chat, Messages
+  - [x] Item Navigasi Sekunder: Profile, Settings, Help & Support, Admin (jika staf)
+  - [x] Shortcut keyboard `⌘F` menuju halaman Search
+- [x] Top Header Bar dengan quick search trigger dan notifikasi
 
 ---
 
-## Fase 5: Autentikasi & Modal Overlays
-- [ ] Modal Dialog Autentikasi terpadu (`components/auth/AuthModal.tsx`):
-  - [ ] Tab Masuk (Login) dengan email/password & show/hide toggle
-  - [ ] Tab Daftar (Register) dengan validasi password & terms acknowledgment
-  - [ ] Langkah Verifikasi OTP interaktif dengan timer cooldown & resend
-  - [ ] Overlay Lupa Kata Sandi (Forgot Password) dengan notifikasi pemulihan netral
-- [ ] Protected route guards & session redirection
+## Fase 5: Data Integrity & Realtime Features (P0/P1)
+- [x] Service layer Supabase Reports (`lib/supabase/reports.ts`) untuk query terpadu ke `public.reports`, `report_categories`, `report_media`, dan `user_profiles`
+- [x] Pembersihan total `initialSampleReports` dari halaman operasional:
+  - [x] Discover Feed (`/app`) terhubung ke database riil + genuine empty state
+  - [x] Seeker Hub (`/app/seeker`) terhubung ke database riil + genuine empty state
+  - [x] Finder Hub (`/app/finder`) terhubung ke database riil + genuine empty state
+  - [x] Search N2L (`/app/search`) terhubung ke database riil + genuine empty state
+  - [x] Profile Page (`/app/profile`) terhubung ke riwayat laporan user asli
+  - [x] Report Detail (`/app/reports/[id]`) terhubung ke data spesifik report dengan fallback 404
+- [x] Global Chat Komunitas (`/app/community`):
+  - [x] Terhubung ke room global `00000000-0000-4000-8000-000000000001`
+  - [x] Realtime subscription via Supabase channel WebSocket
+  - [x] Bubble pesan responsif (kanan oranye untuk user aktif, kiri netral untuk warga lain)
+  - [x] Keyboard handling (Enter kirim, Shift+Enter baris baru) dan non-intrusive auto-scroll
+- [x] Pengaturan Akun (`/app/settings`):
+  - [x] Pengelolaan blokir pengguna terhubung ke tabel `public.user_blocks` (tanpa data tiruan SpammerAccount99)
+  - [x] Preferensi notifikasi terhubung ke `public.notification_preferences`
+  - [x] Form ganti kata sandi fungsional via `supabase.auth.updateUser`
 
 ---
 
-## Fase 6: Core Lost-and-Found Workflows
-- [ ] Discover Feed (`/app/page.tsx` atau `/app/discover`):
-  - [ ] Feed campuran Seeker & Finder bergaya sosial
-  - [ ] Filter pills kategori dinamis (`Semua`, `Barang Hilang`, `Barang Ditemukan`, etc.)
-  - [ ] Kartu Laporan (`ReportCard`): foto 16:10, tag status, lokasi, waktu relatif, pembuat, badge verifikasi petugas, CTA "Chat sekarang" / "Lihat detail"
-- [ ] Seeker Dashboard & Feed (`/app/seeker/page.tsx`):
-  - [ ] Tab `Jelajahi Kehilangan`, `Laporan Saya`, `Kandidat Kecocokan`
-  - [ ] Tombol CTA Buat Laporan Kehilangan
-- [ ] Finder Dashboard & Feed (`/app/finder/page.tsx`):
-  - [ ] Tab `Jelajahi Temuan`, `Laporan Saya`, `Klaim Masuk`
-  - [ ] Tombol CTA Buat Laporan Penemuan
-  - [ ] Dukungan badge kuning `Petugas lokasi terverifikasi`
-- [ ] Modal Buat/Edit Laporan (`components/reports/ReportModal.tsx`):
-  - [ ] Bidang publik: Judul, kategori, deskripsi umum, lokasi tempat/kampus, tanggal/waktu, unggah foto
-  - [ ] **Langkah Bukti Kepemilikan Privat (Anti-Fraud)**: input rahasia (nomor seri, ciri tersembunyi) yang tidak pernah tampil di feed publik
-- [ ] Detail Laporan Barang (`/app/reports/[id]/page.tsx`):
-  - [ ] Galeri foto resolusi tinggi, status badge, metadata lengkap
-  - [ ] Aksi kontekstual: "Klaim Kepemilikan", "Hubungi Penemu/Pelapor", "Laporkan Postingan"
-  - [ ] Tombol terjemahan on-demand ("Terjemahkan" / "Lihat teks asli")
-- [ ] Modal Klaim Kepemilikan (`components/reports/ClaimModal.tsx`):
-  - [ ] Input bukti verifikasi rahasia, catatan klaim, upload bukti
-  - [ ] Disclaimer bahwa AI matching bukan bukti mutlak
-
----
-
-## Fase 7: Komunikasi & Keamanan Komunitas
-- [ ] Pesan Pribadi / Private Messages (`/app/messages/page.tsx`):
-  - [ ] Dua panel desktop (daftar percakapan & jendela obrolan aktif)
-  - [ ] Kartu konteks barang yang sedang dikoordinasikan di atas obrolan
-  - [ ] Pengiriman pesan teks & lampiran aman
-  - [ ] Menu keamanan: "Laporkan Pesan", "Laporkan Pengguna", "Blokir Pengguna"
-- [ ] Global Chat Komunitas (`/app/community/page.tsx`):
-  - [ ] Stream pesan publik komunitas dengan panduan etika & keamanan
-  - [ ] Pelaporan pesan spam/pelanggaran
-- [ ] Modal Pelaporan Keamanan (`components/safety/SafetyReportModal.tsx`):
-  - [ ] Pilihan target (post, user, message), opsi alasan (spam, scam, pelecehan, info palsu), input detail
-
----
-
-## Fase 8: Search N2L, Muara AI Assistant & Matching
-- [ ] Halaman Search N2L (`/app/search/page.tsx`):
-  - [ ] Input pencarian Natural Language ("dompet hitam dekat perpustakaan")
-  - [ ] Rekomendasi kata kunci populer
-  - [ ] Filter laci/drawer: Jenis (Hilang/Temukan), Kategori, Rentang Tanggal, Lokasi
-  - [ ] Hasil pencarian dengan kartu indikator kemungkinan cocok
-- [ ] Floating Muara AI Assistant Widget (`components/ai/MuaraAIChatWidget.tsx`):
-  - [ ] Launcher mengambang di pojok kanan bawah
-  - [ ] Percakapan ramah panduan cara lapor aman, etika serah terima, kuis kepemilikan
-  - [ ] Integrasi endpoint API `/api/ai/chat` (OpenAI / Gemini)
-- [ ] AI Matching API Endpoint / Helper (`/api/ai/match`):
-  - [ ] Analisis kesamaan teks/atribut laporan
-
----
-
-## Fase 9: Profil Pengguna, Pengaturan & Notifikasi
-- [ ] Halaman Profil (`/app/profile/page.tsx`):
-  - [ ] Avatar, display name, handle, bio, reputasi komunitas
-  - [ ] Riwayat laporan publik pengguna
-- [ ] Halaman Pengaturan (`/app/settings/page.tsx`):
-  - [ ] Ubah data profil
-  - [ ] Pilihan Bahasa (`Bahasa Indonesia` / `English`)
-  - [ ] Pilihan Tema (`Terang` / `Gelap` / `Sistem`)
-  - [ ] Pengaturan Notifikasi
-  - [ ] Daftar Pengguna yang Diblokir (dengan tombol Buka Blokir)
-  - [ ] Tombol Keluar (Sign Out)
-- [ ] Panel Notifikasi (`/app/notifications/page.tsx` atau dropdown header):
-  - [ ] Notifikasi klaim baru, pesan masuk, kecocokan AI, status laporan
-
----
-
-## Fase 10: Admin & Moderation Dashboard
-- [ ] Admin Console (`/admin/page.tsx`):
-  - [ ] Proteksi hak akses role staf (`admin`, `moderator`)
-  - [ ] Antrean Laporan Keamanan (Safety Reports Queue) untuk review pos/user
-  - [ ] Aksi moderasi: Peringatan, Pembatasan Sementara, Pemblokiran Permanen dengan alasan & audit trail
-  - [ ] Verifikasi Petugas Lokasi (Approve/Reject permintaan badge kuning)
-  - [ ] Log Audit Aktivitas Moderasi
+## Fase 6: Localization & Translation On-Demand (P2)
+- [x] Server Route `/api/translate`:
+  - [x] Caching cerdas di tabel `public.report_translations` (0 API call jika sudah pernah diterjemahkan)
+  - [x] Integrasi Google Cloud Translation API v2 menggunakan server-only key `GOOGLE_TRANSLATE_API_KEY`
+  - [x] Cache write-back otomatis ke `report_translations`
+  - [x] Validasi input ketat (maks 5000 karakter, target language `id`/`en`) dan fallback aman
+- [x] Pembuatan `.env.example` lengkap dengan instruksi keamanan
+- [x] Verifikasi akhir: `npm run lint` (0 error) dan `npm run build` (Clean production build)

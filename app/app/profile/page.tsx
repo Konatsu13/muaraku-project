@@ -12,8 +12,8 @@ import {
   Loader2,
   Mail,
 } from "lucide-react";
-import { ReportCard } from "@/components/reports/ReportCard";
-import { initialSampleReports } from "@/lib/data/sampleReports";
+import { ReportCard, ReportItem } from "@/components/reports/ReportCard";
+import { fetchReports } from "@/lib/supabase/reports";
 
 export default function ProfilePage() {
   const { user, profile, refreshProfile } = useAuth();
@@ -23,12 +23,24 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState(profile?.display_name || "Pengguna MuaraKu");
   const [bio, setBio] = useState(profile?.bio || "");
   const [saving, setSaving] = useState(false);
+  const [myReports, setMyReports] = useState<ReportItem[]>([]);
+  const [loadingReports, setLoadingReports] = useState(true);
 
-  const myReports = initialSampleReports.filter(
-    (r) =>
-      r.author_name === (profile?.display_name || user?.email?.split("@")[0]) ||
-      r.id === "rep-002"
-  );
+  React.useEffect(() => {
+    let isMounted = true;
+    async function loadUserReports() {
+      if (!user) return;
+      const res = await fetchReports({ reporter_user_id: user.id });
+      if (isMounted) {
+        setMyReports(res.data || []);
+        setLoadingReports(false);
+      }
+    }
+    loadUserReports();
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,36 +1,208 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
-import { useI18n, Locale } from "@/lib/i18n";
-import { useTheme, Theme } from "@/lib/theme";
+import { useI18n } from "@/lib/i18n";
+import { useTheme } from "@/lib/theme";
+import { createClient } from "@/lib/supabase/client";
 import {
-  Settings,
   Sun,
   Moon,
   Laptop,
   Globe,
   Bell,
-  Shield,
+  Lock,
   UserX,
   LogOut,
-  CheckCircle,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 export default function SettingsPage() {
-  const { user, signOut } = useAuth();
+  const { user, profile, signOut, refreshProfile } = useAuth();
   const { locale, setLocale, t } = useI18n();
   const { theme, setTheme } = useTheme();
+  const supabase = createClient();
 
-  const [emailNotif, setEmailNotif] = useState(true);
+  // Notification preferences state
   const [matchNotif, setMatchNotif] = useState(true);
-  const [blockedUsers, setBlockedUsers] = useState<string[]>([
-    "SpammerAccount99",
-  ]);
+  const [msgNotif, setMsgNotif] = useState(true);
+  const [savingNotif, setSavingNotif] = useState(false);
 
-  const handleUnblock = (username: string) => {
+  // Blocked users state (real persistence)
+  const [blockedUsers, setBlockedUsers] = useState<{ id: string; name: string }[]>([]);
+  const [loadingBlocks, setLoadingBlocks] = useState(false);
+
+  // Change password state
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [changingPass, setChangingPass] = useState(false);
+  const [passError, setPassError] = useState<string | null>(null);
+  const [passSuccess, setPassSuccess] = useState<string | null>(null);
+
+  // Status feedback
+  const [generalFeedback, setGeneralFeedback] = useState<string | null>(null);
+
+  // Load preferences and blocked users on mount
+  useEffect(() => {
+    if (!user) return;
+
+    const loadSettings = async () => {
+      // 1. Notification preferences
+      const { data: prefData } = await supabase
+        .from("notification_preferences")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (prefData) {
+        setMatchNotif(prefData.in_app_matches ?? true);
+        setMsgNotif(prefData.in_app_messages ?? true);
+      }
+
+      // 2. Blocked users
+      setLoadingBlocks(true);
+      const { data: blocksData } = await supabase
+        .from("user_blocks")
+        .select(`
+          blocked_user_id,
+          user_profiles:blocked_user_id (
+            display_name
+          )
+        `)
+        .eq("blocker_user_id", user.id);
+
+      if (blocksData) {
+        const mapped = blocksData.map((b: { blocked_user_id: string; user_profiles: unknown }) => {
+          const prof = b.user_profiles as { display_name?: string } | null;
+          return {
+            id: b.blocked_user_id,
+            name: prof?.display_name || "Pengguna",
+          };
+        });
+        setBlockedUsers(mapped);
+      }
+      setLoadingBlocks(false);
+    };
+
+    loadSettings();
+  }, [user, supabase]);
+
+  // Handle Theme change with persistence to user_profiles
+  const handleThemeChange = async (newTheme: "light" | "dark" | "system") => {
+    setTheme(newTheme);
+    if (user) {
+      await supabase
+        .from("user_profiles")
+        .update({ theme: newTheme })
+        .eq("user_id", user.id);
+      refreshProfile();
+    }
+  };
+
+  // Handle Locale change with persistence to user_profiles
+  const handleLocaleChange = async (newLocale: "id" | "en") => {
+    setLocale(newLocale);
+    if (user) {
+      await supabase
+        .from("user_profiles")
+        .update({ preferred_language: newLocale })
+        .eq("user_id", user.id);
+      refreshProfile();
+    }
+  };
+
+  // Handle saving notification preferences
+  const handleSaveNotificationPref = async (newMatch: boolean, newMsg: boolean) => {
+    setMatchNotif(newMatch);
+    setMsgNotif(newMsg);
+    if (!user) return;
+
+    setSavingNotif(true);
+    try {
+      await supabase.from("notification_preferences").upsert({
+        user_id: user.id,
+        in_app_matches: newMatch,
+        in_app_messages: newMsg,
+        updated_at: new Date().toISOString(),
+      });
+      setGeneralFeedback(
+        locale === "en"
+          ? "Notification preferences saved"
+          : "Preferensi notifikasi berhasil disimpan"
+      );
+      setTimeout(() => setGeneralFeedback(null), 3000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSavingNotif(false);
+    }
+  };
+
+  // Handle unblocking user
+  const handleUnblock = async (blockedUserId: string) => {
+    if (!user) return;
     if (confirm(t.settings.unblock_confirm)) {
-      setBlockedUsers((prev) => prev.filter((u) => u !== username));
+      await supabase
+        .from("user_blocks")
+        .delete()
+        .eq("blocker_user_id", user.id)
+        .eq("blocked_user_id", blockedUserId);
+
+      setBlockedUsers((prev) => prev.filter((u) => u.id !== blockedUserId));
+    }
+  };
+
+  // Handle password update
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPassError(null);
+    setPassSuccess(null);
+
+    if (newPassword.length < 8) {
+      setPassError(
+        locale === "en"
+          ? "Password must be at least 8 characters long."
+          : "Kata sandi harus minimal 8 karakter."
+      );
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPassError(
+        locale === "en"
+          ? "Passwords do not match."
+          : "Konfirmasi kata sandi tidak cocok."
+      );
+      return;
+    }
+
+    setChangingPass(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) {
+        setPassError(error.message);
+      } else {
+        setPassSuccess(
+          locale === "en"
+            ? "Your password has been successfully updated."
+            : "Kata sandi Anda berhasil diperbarui."
+        );
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Gagal memperbarui kata sandi";
+      setPassError(msg);
+    } finally {
+      setChangingPass(false);
     }
   };
 
@@ -41,9 +213,18 @@ export default function SettingsPage() {
           {t.settings.title}
         </h1>
         <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
-          Kelola preferensi akun, tampilan, privasi, dan bahasa MuaraKu Anda.
+          {locale === "en"
+            ? "Manage your account preferences, theme, privacy, and password."
+            : "Kelola preferensi akun, tampilan, privasi, dan kata sandi MuaraKu Anda."}
         </p>
       </div>
+
+      {generalFeedback && (
+        <div className="flex items-center gap-2 p-3 text-xs sm:text-sm font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-2xl animate-fade-in">
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+          <span>{generalFeedback}</span>
+        </div>
+      )}
 
       {/* 1. THEME SETTING */}
       <div className="p-6 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-4">
@@ -54,11 +235,11 @@ export default function SettingsPage() {
 
         <div className="grid grid-cols-3 gap-3">
           <button
-            onClick={() => setTheme("light")}
+            onClick={() => handleThemeChange("light")}
             className={`p-4 rounded-2xl border text-center flex flex-col items-center gap-2 transition-all ${
               theme === "light"
                 ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold"
-                : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300"
             }`}
           >
             <Sun className="w-5 h-5" />
@@ -66,11 +247,11 @@ export default function SettingsPage() {
           </button>
 
           <button
-            onClick={() => setTheme("dark")}
+            onClick={() => handleThemeChange("dark")}
             className={`p-4 rounded-2xl border text-center flex flex-col items-center gap-2 transition-all ${
               theme === "dark"
                 ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold"
-                : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300"
             }`}
           >
             <Moon className="w-5 h-5" />
@@ -78,11 +259,11 @@ export default function SettingsPage() {
           </button>
 
           <button
-            onClick={() => setTheme("system")}
+            onClick={() => handleThemeChange("system")}
             className={`p-4 rounded-2xl border text-center flex flex-col items-center gap-2 transition-all ${
               theme === "system"
                 ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold"
-                : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300"
             }`}
           >
             <Laptop className="w-5 h-5" />
@@ -100,98 +281,182 @@ export default function SettingsPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <button
-            onClick={() => setLocale("id")}
+            onClick={() => handleLocaleChange("id")}
             className={`p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
               locale === "id"
                 ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold"
-                : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300"
             }`}
           >
             <div>
               <p className="text-xs font-bold">Bahasa Indonesia</p>
               <p className="text-[11px] text-zinc-400">Bahasa bawaan komunitas</p>
             </div>
-            {locale === "id" && <CheckCircle className="w-4 h-4 text-orange-500" />}
+            {locale === "id" && <CheckCircle2 className="w-4 h-4 text-orange-500" />}
           </button>
 
           <button
-            onClick={() => setLocale("en")}
+            onClick={() => handleLocaleChange("en")}
             className={`p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
               locale === "en"
                 ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold"
-                : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300"
             }`}
           >
             <div>
               <p className="text-xs font-bold">English</p>
               <p className="text-[11px] text-zinc-400">International language</p>
             </div>
-            {locale === "en" && <CheckCircle className="w-4 h-4 text-orange-500" />}
+            {locale === "en" && <CheckCircle2 className="w-4 h-4 text-orange-500" />}
           </button>
         </div>
       </div>
 
       {/* 3. NOTIFICATION PREFERENCES */}
       <div className="p-6 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-4">
-        <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-          <Bell className="w-4 h-4 text-orange-500" />
-          <span>Pengaturan Notifikasi</span>
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <Bell className="w-4 h-4 text-orange-500" />
+            <span>{locale === "en" ? "Notification Preferences" : "Pengaturan Notifikasi"}</span>
+          </h2>
+          {savingNotif && (
+            <span className="text-[11px] text-orange-500 flex items-center gap-1 font-medium">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Menyimpan...
+            </span>
+          )}
+        </div>
 
         <div className="space-y-3">
-          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 cursor-pointer">
-            <div>
+          <label className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 cursor-pointer">
+            <div className="pr-4">
               <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                Notifikasi Kecocokan AI Matching
+                {locale === "en" ? "AI Matching Candidates" : "Notifikasi Kecocokan AI Matching"}
               </p>
-              <p className="text-[11px] text-zinc-400">
-                Dapatkan pemberitahuan instan saat ada barang temuan yang mirip laporan Anda.
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                {locale === "en"
+                  ? "Receive alerts when a found item resembles your lost report."
+                  : "Dapatkan pemberitahuan instan saat ada barang temuan yang mirip laporan Anda."}
               </p>
             </div>
             <input
               type="checkbox"
               checked={matchNotif}
-              onChange={(e) => setMatchNotif(e.target.checked)}
-              className="w-4 h-4 rounded text-orange-500 focus:ring-orange-500"
+              onChange={(e) => handleSaveNotificationPref(e.target.checked, msgNotif)}
+              className="w-4 h-4 rounded text-orange-500 focus:ring-orange-500 cursor-pointer"
             />
           </label>
 
-          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 cursor-pointer">
-            <div>
+          <label className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 cursor-pointer">
+            <div className="pr-4">
               <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                Notifikasi Pesan &amp; Klaim Masuk
+                {locale === "en" ? "Messages & Claim Updates" : "Notifikasi Pesan & Klaim Masuk"}
               </p>
-              <p className="text-[11px] text-zinc-400">
-                Pemberitahuan saat ada pesan atau verifikasi klaim baru dari pengguna lain.
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                {locale === "en"
+                  ? "Alerts when someone messages you or submits ownership claim verification."
+                  : "Pemberitahuan saat ada pesan atau verifikasi klaim baru dari pengguna lain."}
               </p>
             </div>
             <input
               type="checkbox"
-              checked={emailNotif}
-              onChange={(e) => setEmailNotif(e.target.checked)}
-              className="w-4 h-4 rounded text-orange-500 focus:ring-orange-500"
+              checked={msgNotif}
+              onChange={(e) => handleSaveNotificationPref(matchNotif, e.target.checked)}
+              className="w-4 h-4 rounded text-orange-500 focus:ring-orange-500 cursor-pointer"
             />
           </label>
         </div>
       </div>
 
-      {/* 4. BLOCKED USERS */}
+      {/* 4. CHANGE PASSWORD */}
+      <div className="p-6 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-4">
+        <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+          <Lock className="w-4 h-4 text-orange-500" />
+          <span>{locale === "en" ? "Change Password" : "Ubah Kata Sandi"}</span>
+        </h2>
+
+        {passError && (
+          <div className="flex items-center gap-2 p-3 text-xs text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{passError}</span>
+          </div>
+        )}
+
+        {passSuccess && (
+          <div className="flex items-center gap-2 p-3 text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-xl">
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            <span>{passSuccess}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+              {locale === "en" ? "New Password (min. 8 characters)" : "Kata Sandi Baru (min. 8 karakter)"}
+            </label>
+            <div className="relative">
+              <input
+                type={showPass ? "text" : "password"}
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-3.5 pr-10 py-2.5 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-zinc-100 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass(!showPass)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+              >
+                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+              {locale === "en" ? "Confirm New Password" : "Konfirmasi Kata Sandi Baru"}
+            </label>
+            <input
+              type={showPass ? "text" : "password"}
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-zinc-100 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={changingPass || !newPassword}
+            className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-colors disabled:opacity-50"
+          >
+            {changingPass && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            <span>{locale === "en" ? "Update Password" : "Simpan Kata Sandi"}</span>
+          </button>
+        </form>
+      </div>
+
+      {/* 5. BLOCKED USERS */}
       <div className="p-6 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-4">
         <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
           <UserX className="w-4 h-4 text-orange-500" />
           <span>{t.settings.blocked_title}</span>
         </h2>
 
-        {blockedUsers.length > 0 ? (
+        {loadingBlocks ? (
+          <p className="text-xs text-zinc-400">Memuat daftar blokir...</p>
+        ) : blockedUsers.length > 0 ? (
           <div className="divide-y divide-zinc-100 dark:divide-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl overflow-hidden">
-            {blockedUsers.map((uname) => (
+            {blockedUsers.map((b) => (
               <div
-                key={uname}
+                key={b.id}
                 className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 flex items-center justify-between text-xs"
               >
-                <span className="font-semibold text-zinc-800 dark:text-zinc-200">{uname}</span>
+                <span className="font-semibold text-zinc-800 dark:text-zinc-200">{b.name}</span>
                 <button
-                  onClick={() => handleUnblock(uname)}
+                  onClick={() => handleUnblock(b.id)}
                   className="font-bold text-orange-600 dark:text-orange-400 hover:underline"
                 >
                   {t.common.unblock}
@@ -200,11 +465,15 @@ export default function SettingsPage() {
             ))}
           </div>
         ) : (
-          <p className="text-xs text-zinc-400">{t.settings.blocked_empty}</p>
+          <p className="text-xs text-zinc-400">
+            {locale === "en"
+              ? "You haven't blocked any users."
+              : "Belum ada pengguna yang Anda blokir."}
+          </p>
         )}
       </div>
 
-      {/* 5. LOGOUT ACTION */}
+      {/* 6. LOGOUT ACTION */}
       {user && (
         <div className="pt-2">
           <button
@@ -213,10 +482,10 @@ export default function SettingsPage() {
                 signOut();
               }
             }}
-            className="w-full py-3.5 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 font-bold rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 hover:bg-red-100 transition-colors"
+            className="w-full py-3.5 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 text-rose-600 dark:text-rose-400 font-bold rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            <span>Keluar dari Akun MuaraKu</span>
+            <span>{locale === "en" ? "Sign Out of MuaraKu" : "Keluar dari Akun MuaraKu"}</span>
           </button>
         </div>
       )}

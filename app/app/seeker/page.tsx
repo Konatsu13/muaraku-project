@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { ReportCard, ReportItem } from "@/components/reports/ReportCard";
-import { initialSampleReports } from "@/lib/data/sampleReports";
+import { fetchReports } from "@/lib/supabase/reports";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -10,37 +10,57 @@ import {
   Sparkles,
   Plus,
   FileText,
-  CheckCircle,
-  Clock,
-  ArrowRight,
-  ShieldCheck,
+  Loader2,
   AlertCircle,
 } from "lucide-react";
 import { ReportModal } from "@/components/reports/ReportModal";
 
 export default function SeekerPage() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { t } = useI18n();
 
   const [activeTab, setActiveTab] = useState<"explore" | "my_reports" | "matches">("explore");
   const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportsList, setReportsList] = useState<ReportItem[]>(initialSampleReports);
+  const [lostReports, setLostReports] = useState<ReportItem[]>([]);
+  const [myReports, setMyReports] = useState<ReportItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Lost items filter
-  const lostReports = reportsList.filter((r) => r.type === "lost");
+  const loadData = useCallback(async () => {
+    setErrorMsg(null);
 
-  // My lost items (filter or simulated)
-  const myReports = lostReports.filter(
-    (r) =>
-      r.author_name === (profile?.display_name || user?.email?.split("@")[0]) ||
-      r.id === "rep-002"
-  );
+    const [allLostRes, myLostRes] = await Promise.all([
+      fetchReports({ type: "lost" }),
+      user ? fetchReports({ type: "lost", reporter_user_id: user.id }) : Promise.resolve({ data: [], error: null }),
+    ]);
 
-  // Matched candidate items
+    if (allLostRes.error) {
+      setErrorMsg(allLostRes.error.message);
+    } else {
+      setLostReports(allLostRes.data);
+    }
+
+    if (myLostRes.data) {
+      setMyReports(myLostRes.data);
+    }
+
+    setLoading(false);
+  }, [user]);
+
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      await loadData();
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, [loadData]);
+
   const matchedReports = lostReports.filter((r) => Boolean(r.match_confidence));
 
-  const handleReportCreated = (newReport: ReportItem) => {
-    setReportsList((prev) => [newReport, ...prev]);
+  const handleReportCreated = () => {
+    loadData();
     setActiveTab("my_reports");
   };
 
@@ -105,66 +125,107 @@ export default function SeekerPage() {
         </button>
       </div>
 
-      {/* Content per Tab */}
-      {activeTab === "explore" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {lostReports.map((report) => (
-            <ReportCard key={report.id} report={report} />
-          ))}
+      {/* Loading & Error States */}
+      {loading ? (
+        <div className="py-20 flex flex-col items-center justify-center space-y-3">
+          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+          <p className="text-xs text-zinc-500">Memuat laporan kehilangan...</p>
         </div>
-      )}
-
-      {activeTab === "my_reports" && (
-        <div className="space-y-6">
-          {myReports.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {myReports.map((report) => (
-                <div key={report.id} className="relative">
-                  <ReportCard report={report} />
-                  <div className="mt-2 flex items-center justify-between text-xs px-2 text-zinc-500">
-                    <span className="font-semibold text-emerald-600">Status: Aktif Memantau</span>
-                    <button
-                      onClick={() => alert("Fitur edit laporan siap digunakan.")}
-                      className="text-orange-600 hover:underline font-semibold"
-                    >
-                      Ubah Rincian
-                    </button>
-                  </div>
+      ) : errorMsg ? (
+        <div className="p-10 text-center rounded-3xl border border-rose-200 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 space-y-4">
+          <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
+          <p className="text-xs text-rose-600 dark:text-rose-400">{errorMsg}</p>
+          <button
+            onClick={loadData}
+            className="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700"
+          >
+            Coba Lagi
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Content per Tab */}
+          {activeTab === "explore" && (
+            lostReports.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {lostReports.map((report) => (
+                  <ReportCard key={report.id} report={report} />
+                ))}
+              </div>
+            ) : (
+              <div className="p-12 text-center rounded-3xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50 space-y-3">
+                <Search className="w-10 h-10 text-zinc-400 mx-auto" />
+                <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-200">
+                  Belum Ada Laporan Kehilangan
+                </h3>
+                <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                  Belum ada laporan kehilangan yang aktif. Jika Anda kehilangan barang, buat laporan sekarang.
+                </p>
+                <div>
+                  <button
+                    onClick={() => setReportModalOpen(true)}
+                    className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-xs"
+                  >
+                    {t.seeker.create_cta}
+                  </button>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-12 text-center rounded-3xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50 space-y-3">
-              <FileText className="w-10 h-10 text-zinc-400 mx-auto" />
-              <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-200">
-                {t.seeker.no_my_reports}
-              </h3>
-              <button
-                onClick={() => setReportModalOpen(true)}
-                className="px-4 py-2 bg-orange-500 text-white font-bold rounded-xl text-xs"
-              >
-                {t.seeker.create_cta}
-              </button>
+              </div>
+            )
+          )}
+
+          {activeTab === "my_reports" && (
+            <div className="space-y-6">
+              {myReports.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {myReports.map((report) => (
+                    <div key={report.id} className="relative">
+                      <ReportCard report={report} />
+                      <div className="mt-2 flex items-center justify-between text-xs px-2 text-zinc-500">
+                        <span className="font-semibold text-emerald-600">Status: Aktif Memantau</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-12 text-center rounded-3xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50 space-y-3">
+                  <FileText className="w-10 h-10 text-zinc-400 mx-auto" />
+                  <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-200">
+                    {t.seeker.no_my_reports}
+                  </h3>
+                  <button
+                    onClick={() => setReportModalOpen(true)}
+                    className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-xs"
+                  >
+                    {t.seeker.create_cta}
+                  </button>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {activeTab === "matches" && (
-        <div className="space-y-6">
-          <div className="p-4 rounded-2xl bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900/50 text-xs text-orange-900 dark:text-orange-200 flex items-start gap-3">
-            <Sparkles className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
-            <div className="leading-relaxed">
-              <strong>Kandidat Rekomendasi AI Matching:</strong> Algoritma menganalisis atribut lokasi, waktu, dan ciri visual barang hilang Anda terhadap temuan terbaru di database.
+          {activeTab === "matches" && (
+            <div className="space-y-6">
+              <div className="p-4 rounded-2xl bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900/50 text-xs text-orange-900 dark:text-orange-200 flex items-start gap-3">
+                <Sparkles className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  <strong>Kandidat Rekomendasi AI Matching:</strong> Algoritma menganalisis kesamaan atribut lokasi, waktu, dan ciri visual laporan Anda terhadap laporan temuan di database.
+                </div>
+              </div>
+
+              {matchedReports.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {matchedReports.map((report) => (
+                    <ReportCard key={report.id} report={report} />
+                  ))}
+                </div>
+              ) : (
+                <div className="p-10 text-center rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
+                  Belum ada kandidat kecocokan otomatis saat ini.
+                </div>
+              )}
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {matchedReports.map((report) => (
-              <ReportCard key={report.id} report={report} />
-            ))}
-          </div>
-        </div>
+          )}
+        </>
       )}
 
       {/* Report Modal */}

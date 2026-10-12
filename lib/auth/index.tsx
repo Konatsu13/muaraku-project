@@ -12,6 +12,7 @@ export interface UserProfile {
   bio: string;
   preferred_language: "id" | "en";
   theme: "light" | "dark" | "system";
+  gender?: "male" | "female" | "unspecified" | null;
 }
 
 export type AuthModalView = "login" | "register" | "otp" | "forgot" | null;

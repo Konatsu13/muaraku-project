@@ -30,7 +30,7 @@ interface StaffVerificationRequest {
 }
 
 export default function AdminPage() {
-  const { user, isAdmin, isModerator } = useAuth();
+  const { user, isAdmin, isModerator, isLoading } = useAuth();
 
   const [activeTab, setActiveTab] = useState<"queue" | "staff" | "users" | "audit">("queue");
 
@@ -80,6 +80,39 @@ export default function AdminPage() {
       prev.map((req) => (req.id === id ? { ...req, status: action } : req))
     );
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FFFCF8] dark:bg-[#18181B] text-zinc-900 dark:text-zinc-100">
+        <p className="text-sm text-zinc-500">Memeriksa izin akses admin...</p>
+      </div>
+    );
+  }
+
+  if (!user || (!isAdmin && !isModerator)) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#FFFCF8] dark:bg-[#18181B] text-zinc-900 dark:text-zinc-100">
+        <div className="max-w-md w-full text-center space-y-4 p-8 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-600 flex items-center justify-center mx-auto font-bold">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <h2 className="text-xl font-bold">Akses Terbatas</h2>
+          <p className="text-xs text-zinc-500 leading-relaxed">
+            Halaman konsol administrasi ini khusus diperuntukkan bagi Administrator dan Moderator resmi MuaraKu. Akun Anda tidak memiliki peran staf yang sesuai.
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/app"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-semibold hover:opacity-90"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Kembali ke Aplikasi
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#FFFCF8] dark:bg-[#18181B] text-zinc-900 dark:text-zinc-100 p-4 sm:p-8 animate-fade-in">
