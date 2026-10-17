@@ -81,10 +81,10 @@ export function AuthModal() {
     password.length === 0
       ? ""
       : strengthScore <= 2
-      ? locale === "en" ? "Weak" : "Lemah"
+      ? t.auth.password_weak
       : strengthScore === 3
-      ? locale === "en" ? "Medium" : "Sedang"
-      : locale === "en" ? "Strong" : "Kuat";
+      ? t.auth.password_medium
+      : t.auth.password_strong;
 
   const strengthColor =
     strengthScore <= 2
@@ -184,6 +184,7 @@ export function AuthModal() {
       } else {
         setPendingEmail(email.trim());
         setCooldown(60);
+        setOtpCode("");
         if (data.session) {
           closeAuthModal();
           const destination = getSafeReturnUrl();
@@ -207,25 +208,18 @@ export function AuthModal() {
     setLoading(true);
 
     try {
-      // First attempt with signup OTP type
+      // Supabase v2 deprecated `signup`/`magiclink` verify types.
+      // Using `email` as the single attempt avoids consuming/invalidating the
+      // token with a deprecated-type call (which caused "expired/mismatch").
       const { error } = await supabase.auth.verifyOtp({
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         token: otpCode.trim(),
-        type: "signup",
+        type: "email",
       });
 
       if (error) {
-        // Fallback for magiclink/email OTP type
-        const { error: err2 } = await supabase.auth.verifyOtp({
-          email: email.trim(),
-          token: otpCode.trim(),
-          type: "email",
-        });
-
-        if (err2) {
-          setErrorMsg(t.auth.invalid_otp_error);
-          return;
-        }
+        setErrorMsg(t.auth.invalid_otp_error);
+        return;
       }
 
       closeAuthModal();
@@ -255,11 +249,8 @@ export function AuthModal() {
         setErrorMsg(error.message);
       } else {
         setCooldown(60);
-        setSuccessMsg(
-          locale === "en"
-            ? "A new verification code has been sent to your email."
-            : "Kode verifikasi baru telah dikirimkan ke email Anda."
-        );
+        setOtpCode("");
+        setSuccessMsg(t.auth.resend_success);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Gagal mengirim ulang OTP";
@@ -283,11 +274,7 @@ export function AuthModal() {
       if (error) {
         setErrorMsg(error.message);
       } else {
-        setSuccessMsg(
-          locale === "en"
-            ? "If your email is registered, recovery instructions have been sent to your inbox."
-            : "Jika alamat email terdaftar, instruksi pemulihan kata sandi telah dikirimkan ke kotak masuk Anda."
-        );
+        setSuccessMsg(t.auth.recovery_sent);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Terjadi kesalahan";
@@ -331,9 +318,7 @@ export function AuthModal() {
             {authModalView === "otp"
               ? `${t.auth.otp_desc} (${maskedEmail})`
               : authModalView === "forgot"
-              ? locale === "en"
-                ? "Enter your email to receive password recovery instructions."
-                : "Masukkan email Anda untuk menerima instruksi pemulihan."
+              ? t.auth.recovery_email_desc
               : t.common.tagline}
           </p>
         </div>
@@ -546,16 +531,16 @@ export function AuthModal() {
             {/* Gender Selection */}
             <div>
               <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                {locale === "en" ? "Gender" : "Jenis Kelamin"}
+                {t.auth.gender_label}
               </label>
               <select
                 value={gender}
                 onChange={(e) => setGender(e.target.value as "male" | "female" | "unspecified")}
                 className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-zinc-100 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
               >
-                <option value="male">{locale === "en" ? "Male" : "Laki-laki"}</option>
-                <option value="female">{locale === "en" ? "Female" : "Perempuan"}</option>
-                <option value="unspecified">{locale === "en" ? "Prefer not to say" : "Memilih tidak memberi tahu"}</option>
+                <option value="male">{t.auth.gender_male}</option>
+                <option value="female">{t.auth.gender_female}</option>
+                <option value="unspecified">{t.auth.gender_unspecified}</option>
               </select>
             </div>
 
@@ -590,7 +575,7 @@ export function AuthModal() {
                 <div className="mt-2 space-y-1.5 animate-fade-in">
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="text-zinc-500">
-                      {locale === "en" ? "Strength:" : "Kekuatan sandi:"}{" "}
+                      {t.auth.strength_label}{" "}
                       <strong className={strengthColor.split(" ")[1]}>{strengthLabel}</strong>
                     </span>
                     <span className="text-zinc-400">{password.length} karakter</span>
@@ -657,7 +642,7 @@ export function AuthModal() {
                 htmlFor={termsCheckboxId}
                 className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed cursor-pointer select-none"
               >
-                {locale === "en" ? "I agree to the " : "Saya menyetujui "}
+                {t.auth.agree_prefix}
                 <a
                   href="/terms"
                   target="_blank"
@@ -665,9 +650,9 @@ export function AuthModal() {
                   onClick={(e) => e.stopPropagation()}
                   className="text-blue-600 dark:text-blue-400 font-semibold hover:underline focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
                 >
-                  {locale === "en" ? "Terms of Service" : "Ketentuan Layanan"}
+                  {t.auth.terms_service_short}
                 </a>
-                {locale === "en" ? " and " : " dan "}
+                {t.auth.and_conjunction}
                 <a
                   href="/privacy"
                   target="_blank"
@@ -675,7 +660,7 @@ export function AuthModal() {
                   onClick={(e) => e.stopPropagation()}
                   className="text-blue-600 dark:text-blue-400 font-semibold hover:underline focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
                 >
-                  {locale === "en" ? "Privacy Policy" : "Kebijakan Privasi"}
+                  {t.auth.privacy_policy_short}
                 </a>
               </label>
             </div>
@@ -696,7 +681,7 @@ export function AuthModal() {
           <form onSubmit={handleVerifyOtp} className="space-y-5">
             <div>
               <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-2 text-center">
-                {locale === "en" ? "Enter 6-digit OTP code" : "Masukkan 6 Digit Kode OTP"}
+                {t.auth.otp_code_label}
               </label>
               <div className="relative max-w-xs mx-auto">
                 <KeyRound className="w-5 h-5 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -745,7 +730,7 @@ export function AuthModal() {
                 className="flex items-center gap-1 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 mt-2 transition-colors"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                {locale === "en" ? "Change email address" : "Ubah Alamat Email"}
+                {t.auth.change_email}
               </button>
             </div>
           </form>
@@ -778,7 +763,7 @@ export function AuthModal() {
               className="w-full mt-2 py-3 px-4 bg-orange-500 hover:bg-orange-600 active:scale-[0.99] text-white font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {locale === "en" ? "Send Recovery Instructions" : "Kirim Instruksi Pemulihan"}
+              {t.auth.send_recovery_instructions}
             </button>
 
             <div className="text-center pt-2">
@@ -788,7 +773,7 @@ export function AuthModal() {
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                {locale === "en" ? "Back to Login" : "Kembali ke Masuk"}
+                {t.auth.back_to_login}
               </button>
             </div>
           </form>

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import {
   ShieldCheck,
@@ -17,10 +18,11 @@ import { fetchReports } from "@/lib/supabase/reports";
 
 export default function ProfilePage() {
   const { user, profile, refreshProfile } = useAuth();
+  const { t } = useI18n();
   const supabase = createClient();
 
   const [isEditing, setIsEditing] = useState(false);
-  const [displayName, setDisplayName] = useState(profile?.display_name || "Pengguna MuaraKu");
+  const [displayName, setDisplayName] = useState(profile?.display_name || t.common.anonymous);
   const [bio, setBio] = useState(profile?.bio || "");
   const [saving, setSaving] = useState(false);
   const [myReports, setMyReports] = useState<ReportItem[]>([]);
@@ -82,7 +84,7 @@ export default function ProfilePage() {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-                  {profile?.display_name || "Pengguna MuaraKu"}
+                  {profile?.display_name || t.common.anonymous}
                 </h1>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 flex items-center gap-1">
                   <ShieldCheck className="w-3.5 h-3.5" />

@@ -403,10 +403,8 @@ export default function CommunityChatPage() {
             onKeyDown={handleKeyDown}
             placeholder={
               user
-                ? locale === "en"
-                  ? "Write a message... (Enter to send, Shift+Enter for new line)"
-                  : "Ketik pesan publik... (Enter untuk kirim, Shift+Enter baris baru)"
-                : "Masuk terlebih dahulu untuk mengirim pesan"
+                ? t.community.type_placeholder_hint
+                : t.community.type_placeholder_guest
             }
             disabled={!user || sending}
             className="w-full px-4 py-3 max-h-32 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 resize-none transition-all disabled:opacity-50"

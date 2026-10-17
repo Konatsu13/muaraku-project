@@ -159,7 +159,7 @@ export function AppSidebar({
                     MuaraKu<span className="text-orange-500">.id</span>
                   </span>
                   <span className="text-[10px] text-zinc-400 leading-none">
-                    Lost &amp; Found
+                    {t.common.lost_and_found}
                   </span>
                 </div>
               )}
@@ -169,7 +169,7 @@ export function AppSidebar({
             <button
               onClick={toggleCollapsed}
               className="hidden md:flex p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/80 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-              title={collapsed ? "Perluas Sidebar" : "Ciutkan Sidebar"}
+              title={collapsed ? t.common.expand_sidebar : t.common.collapse_sidebar}
               aria-label="Toggle Sidebar"
             >
               {collapsed ? (
@@ -193,10 +193,10 @@ export function AppSidebar({
               className={`w-full py-2.5 px-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-sm flex items-center justify-center gap-2 transition-transform transform active:scale-95 ${
                 collapsed ? "px-0" : ""
               }`}
-              title="Buat Laporan Baru"
+              title={t.common.create_report_title}
             >
               <PlusCircle className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>Buat Laporan</span>}
+              {!collapsed && <span>{t.common.create_report}</span>}
             </button>
           )}
 
@@ -228,7 +228,7 @@ export function AppSidebar({
               <Link
                 href="/app/profile"
                 className={`flex items-center gap-2.5 min-w-0 ${collapsed ? "justify-center" : ""}`}
-                title={profile?.display_name || user.email || "Pengguna"}
+                title={profile?.display_name || user.email || t.common.user_fallback}
               >
                 <div className="w-8 h-8 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 flex items-center justify-center font-bold text-xs flex-shrink-0">
                   {profile?.avatar_path ? (
@@ -240,7 +240,7 @@ export function AppSidebar({
                 {!collapsed && (
                   <div className="flex flex-col min-w-0">
                     <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                      {profile?.display_name || "Pengguna"}
+                      {profile?.display_name || t.common.user_fallback}
                     </span>
                     <span className="text-[10px] text-zinc-400 truncate">
                       {user.email}
