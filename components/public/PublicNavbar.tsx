@@ -7,78 +7,63 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
-import {
-  Compass,
-  Sun,
-  Moon,
-  Laptop,
-  Globe,
-  LogIn,
-  LayoutDashboard,
-  Menu,
-  X,
-} from "lucide-react";
+import { Sun, Moon, Globe, Menu, X } from "lucide-react";
 
 export function PublicNavbar() {
   const pathname = usePathname();
   const { user, openAuthModal } = useAuth();
-  const { locale, setLocale, t } = useI18n();
+  const { locale, setLocale } = useI18n();
   const { theme, setTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const toggleTheme = () => {
-    // Cycle: system -> dark -> light -> system
-    if (theme === "system") setTheme("dark");
-    else if (theme === "dark") setTheme("light");
-    else setTheme("system");
+    setTheme(theme === "dark" ? "light" : "dark");
   };
 
   const toggleLocale = () => {
     setLocale(locale === "id" ? "en" : "id");
   };
 
+  // Nav links based directly on Document/Inspiration/Navbar.png: Home | About | Support | Terms
   const navLinks = [
-    { href: "/", label: t.nav.home },
-    { href: "/about", label: t.nav.about },
-    { href: "/support", label: t.nav.support },
+    { href: "/", label: "Home" },
+    { href: "/about", label: "About" },
+    { href: "/support", label: "Support" },
+    { href: "/terms", label: "Terms" },
   ];
 
   return (
-    <header className="sticky top-0 z-40 bg-[#FFFCF8]/90 dark:bg-[#18181B]/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 transition-colors">
-      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        {/* Brand Lockup */}
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center p-1.5 shadow-xs transition-transform group-hover:scale-105 border border-orange-500/20">
+    <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/80 dark:bg-[#121214]/80 border-b border-zinc-200/80 dark:border-zinc-800 transition-colors">
+      <div className="max-w-[1320px] mx-auto px-4 sm:px-6 h-18 flex items-center justify-between">
+        {/* Brand: Logo + MuaraKu text in brand orange */}
+        <Link href="/" className="flex items-center gap-2.5 group select-none">
+          <div className="w-8 h-8 flex items-center justify-center transition-transform group-hover:scale-105">
             <Image
               src="/logo.svg"
               alt="MuaraKu Logo"
-              width={26}
-              height={26}
+              width={30}
+              height={30}
+              priority
               className="object-contain"
             />
           </div>
-          <div className="flex flex-col">
-            <span className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              MuaraKu
-            </span>
-            <span className="text-[10px] text-zinc-500 dark:text-zinc-400 -mt-1 hidden sm:block">
-              .id — Lost &amp; Found Terpercaya
-            </span>
-          </div>
+          <span className="text-xl font-bold tracking-tight text-[#FB923C] dark:text-[#FB923C]">
+            MuaraKu
+          </span>
         </Link>
 
-        {/* Desktop Nav Links (Home | About | Support) */}
-        <nav className="hidden md:flex items-center gap-8">
+        {/* Center Desktop Navigation Links */}
+        <nav className="hidden md:flex items-center gap-7">
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`text-sm font-medium py-1 transition-colors relative ${
+                className={`text-sm font-semibold transition-colors ${
                   isActive
-                    ? "text-orange-500 font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-orange-500 after:rounded-full"
-                    : "text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-50"
+                    ? "text-[#FB923C]"
+                    : "text-zinc-800 dark:text-zinc-200 hover:text-[#FB923C] dark:hover:text-[#FB923C]"
                 }`}
               >
                 {link.label}
@@ -87,79 +72,65 @@ export function PublicNavbar() {
           })}
         </nav>
 
-        {/* Right Action Tools */}
+        {/* Right Tools: Theme Pill, Language Pill, CTA Button */}
         <div className="hidden md:flex items-center gap-3">
-          {/* Language Toggle Pill */}
+          {/* Theme Pill Toggle [ ☼ ☾ ] */}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800/90 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200/80 dark:border-zinc-700 transition-colors min-h-[38px]"
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label="Toggle theme"
+          >
+            <Sun className={`w-3.5 h-3.5 ${theme === "dark" ? "text-zinc-400" : "text-amber-500 font-bold"}`} />
+            <Moon className={`w-3.5 h-3.5 ${theme === "dark" ? "text-orange-400 font-bold" : "text-zinc-400"}`} />
+          </button>
+
+          {/* Language Pill Toggle [ 🌐 EN / ID ] */}
           <button
             onClick={toggleLocale}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800/80 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg border border-zinc-200/80 dark:border-zinc-700 transition-colors"
-            title="Ganti Bahasa / Switch Language"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800/90 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200/80 dark:border-zinc-700 text-xs font-bold transition-colors min-h-[38px]"
+            title="Switch language"
+            aria-label="Switch language"
           >
             <Globe className="w-3.5 h-3.5 text-zinc-500" />
             <span className="uppercase">{locale}</span>
           </button>
 
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="p-2 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700"
-            title={
-              theme === "system"
-                ? "Tema: Sistem (Klik untuk Gelap)"
-                : theme === "dark"
-                ? "Tema: Gelap (Klik untuk Terang)"
-                : "Tema: Terang (Klik untuk Sistem)"
-            }
-          >
-            {theme === "system" ? (
-              <Laptop className="w-4 h-4 text-orange-500" />
-            ) : theme === "dark" ? (
-              <Sun className="w-4 h-4 text-amber-400" />
-            ) : (
-              <Moon className="w-4 h-4 text-zinc-600" />
-            )}
-          </button>
-
-          {/* App / Auth CTA */}
+          {/* CTA: Login (before auth) or Open App (after auth) */}
           {user ? (
             <Link
               href="/app"
-              className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-xl shadow-sm transition-colors"
+              className="inline-flex items-center justify-center px-5 py-2 rounded-xl bg-[#FB923C] hover:bg-[#EA580C] text-white text-sm font-semibold shadow-xs transition-colors min-h-[40px]"
             >
-              <LayoutDashboard className="w-4 h-4" />
-              <span>Buka Aplikasi</span>
+              Open App
             </Link>
           ) : (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => openAuthModal("login")}
-                className="px-3.5 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white transition-colors"
-              >
-                {t.nav.login}
-              </button>
-              <button
-                onClick={() => openAuthModal("register")}
-                className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-xl shadow-sm transition-colors"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>{t.nav.register}</span>
-              </button>
-            </div>
+            <button
+              onClick={() => openAuthModal("login")}
+              className="inline-flex items-center justify-center px-5 py-2 rounded-xl bg-[#FB923C] hover:bg-[#EA580C] text-white text-sm font-semibold shadow-xs transition-colors min-h-[40px] cursor-pointer"
+            >
+              Login
+            </button>
           )}
         </div>
 
-        {/* Mobile Hamburger Button */}
+        {/* Mobile Hamburger & Quick Theme */}
         <div className="flex md:hidden items-center gap-2">
           <button
             onClick={toggleTheme}
-            className="p-2 text-zinc-600 dark:text-zinc-300"
+            className="p-2 rounded-lg text-zinc-700 dark:text-zinc-300 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Toggle theme"
           >
-            {theme === "dark" ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+            {theme === "dark" ? (
+              <Sun className="w-5 h-5 text-amber-400" />
+            ) : (
+              <Moon className="w-5 h-5 text-zinc-600" />
+            )}
           </button>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 text-zinc-700 dark:text-zinc-300"
-            aria-label="Toggle Menu"
+            className="p-2 rounded-lg text-zinc-800 dark:text-zinc-200 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Toggle Navigation Menu"
           >
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
@@ -168,56 +139,53 @@ export function PublicNavbar() {
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-b border-zinc-200 dark:border-zinc-800 bg-[#FFFCF8] dark:bg-[#18181B] px-6 py-4 space-y-3">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setMobileMenuOpen(false)}
-              className="block py-2 text-base font-medium text-zinc-800 dark:text-zinc-200 hover:text-orange-500"
-            >
-              {link.label}
-            </Link>
-          ))}
+        <div className="md:hidden border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#18181B] px-6 py-5 space-y-4 shadow-lg animate-fade-in">
+          <nav className="space-y-2">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className={`block py-2.5 text-base font-medium rounded-lg px-2 transition-colors ${
+                  pathname === link.href
+                    ? "text-[#FB923C] bg-orange-500/10 font-bold"
+                    : "text-zinc-800 dark:text-zinc-200 hover:text-[#FB923C]"
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+
           <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
             <button
               onClick={toggleLocale}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+              className="flex items-center gap-2 text-xs font-bold px-3.5 py-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
             >
-              <Globe className="w-3.5 h-3.5" />
+              <Globe className="w-3.5 h-3.5 text-zinc-500" />
               <span>Bahasa: {locale.toUpperCase()}</span>
             </button>
           </div>
+
           <div className="pt-2">
             {user ? (
               <Link
                 href="/app"
-                className="w-full py-2.5 bg-orange-500 text-white text-center font-semibold rounded-xl text-sm flex items-center justify-center gap-2"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full py-3 bg-[#FB923C] hover:bg-[#EA580C] text-white text-center font-semibold rounded-xl text-sm flex items-center justify-center shadow-xs"
               >
-                <LayoutDashboard className="w-4 h-4" />
-                <span>Buka Aplikasi</span>
+                Open App
               </Link>
             ) : (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    openAuthModal("login");
-                  }}
-                  className="flex-1 py-2.5 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 text-center font-semibold rounded-xl text-sm"
-                >
-                  {t.nav.login}
-                </button>
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    openAuthModal("register");
-                  }}
-                  className="flex-1 py-2.5 bg-orange-500 text-white text-center font-semibold rounded-xl text-sm"
-                >
-                  {t.nav.register}
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  openAuthModal("login");
+                }}
+                className="w-full py-3 bg-[#FB923C] hover:bg-[#EA580C] text-white text-center font-semibold rounded-xl text-sm flex items-center justify-center shadow-xs cursor-pointer"
+              >
+                Login
+              </button>
             )}
           </div>
         </div>

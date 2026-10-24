@@ -1,656 +1,332 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { PublicNavbar } from "@/components/public/PublicNavbar";
 import { PublicFooter } from "@/components/public/PublicFooter";
-import { ReportCard, ReportItem } from "@/components/reports/ReportCard";
-import { fetchReports } from "@/lib/supabase/reports";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { SkeletonFeed } from "@/components/ui/patterns/LoadingPattern";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import {
-  ShieldCheck,
   Search,
-  Sparkles,
-  ArrowRight,
+  PlusCircle,
+  ShieldCheck,
   Lock,
-  UserCheck,
-  ChevronDown,
-  CheckCircle2,
-  FileText,
-  Users,
   MapPin,
-  Building,
-  Shield,
-  Languages,
-  BadgeCheck,
-  Package,
-  Layers,
-  Inbox,
-  Clock,
-  Compass,
+  ChevronDown,
+  ArrowRight,
+  CheckCircle2,
+  Sparkles,
 } from "lucide-react";
 
 export default function HomePage() {
   const { openAuthModal } = useAuth();
-  const { t } = useI18n();
-  const [feedFilter, setFeedFilter] = useState<"all" | "lost" | "found">("all");
+  const { locale } = useI18n();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const [reports, setReports] = useState<ReportItem[]>([]);
-  const [loadingReports, setLoadingReports] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-    async function loadReports() {
-      setLoadingReports(true);
-      const { data } = await fetchReports({ type: feedFilter });
-      if (isMounted) {
-        setReports(data || []);
-        setLoadingReports(false);
-      }
-    }
-    loadReports();
-    return () => {
-      isMounted = false;
-    };
-  }, [feedFilter]);
 
   const faqs = [
     {
-      q: "Apakah ada biaya tebusan atau pungutan biaya saat barang ditemukan?",
-      a: "Sama sekali tidak ada. MuaraKu beroperasi atas dasar prinsip ketulusan sipil dan integritas pelayanan umum. Siapapun yang meminta biaya tebusan, biaya administrasi ilegal, atau transfer pulsa dapat langsung dilaporkan dan akunnya akan diblokir permanen.",
+      q:
+        locale === "en"
+          ? "Are there any ransom or finding fees?"
+          : "Apakah ada biaya tebusan atau pungutan biaya saat barang ditemukan?",
+      a:
+        locale === "en"
+          ? "Absolutely not. MuaraKu operates on principles of community trust and integrity. Any user demanding ransom or unauthorized fees can be reported and will be permanently banned."
+          : "Sama sekali tidak ada. MuaraKu beroperasi atas dasar prinsip ketulusan komunitas dan integritas layanan publik. Siapapun yang meminta biaya tebusan atau transfer dapat langsung dilaporkan dan akunnya akan diblokir permanen.",
     },
     {
-      q: "Bagaimana cara memverifikasi pemilik sah tanpa membocorkan ciri rahasia?",
-      a: "Saat mendaftarkan barang temuan, penemu menyembunyikan 1–2 detail spesifik (misal: isi saku tersembunyi, warna gantungan kunci di dalam, atau nomor seri). Ketika seorang pencari ingin mengklaim, sistem menyajikan kuis kepemilikan privat tanpa pernah membocorkan ciri tersebut ke publik.",
+      q:
+        locale === "en"
+          ? "How is ownership verified without revealing secret item details?"
+          : "Bagaimana cara memverifikasi pemilik tanpa membocorkan ciri rahasia?",
+      a:
+        locale === "en"
+          ? "When submitting a found item, the finder conceals 1–2 specific details (e.g. keychain color inside, pocket contents). The seeker answers private verification questions without the answers ever being published."
+          : "Saat melaporkan barang temuan, penemu menyembunyikan 1–2 detail spesifik (misal warna gantungan kunci di saku dalam). Ketika pencari mengajukan klaim, sistem menyajikan kuis verifikasi privat tanpa membocorkan ciri tersebut ke publik.",
     },
     {
-      q: "Siapa saja mitra petugas lokasi terverifikasi saat ini?",
-      a: "Mitra resmi mencakup petugas pengamanan stasiun KRL Jabodetabek, pengawas halte TransJakarta, staf perpustakaan perguruan tinggi negeri & swasta terdaftar, serta tim sekuriti gedung publik yang telah melalui proses validasi identitas instansi.",
-    },
-    {
-      q: "Apa yang harus saya lakukan jika menemukan barang berharga tinggi (laptop, dompet, uang)?",
-      a: "Kami menyarankan Anda untuk tidak menyimpannya secara pribadi. Gunakan opsi serah terima ke posko mitra resmi MuaraKu (seperti pos pengamanan stasiun atau pusat keamanan kampus) dan catat tanda terima digital di aplikasi.",
+      q:
+        locale === "en"
+          ? "Who can register as a verified partner?"
+          : "Siapa saja mitra lokasi terverifikasi?",
+      a:
+        locale === "en"
+          ? "Verified partners include university campus staff, public transit officers, library administrators, and certified building security desks."
+          : "Mitra resmi mencakup loket kampus perguruan tinggi negeri & swasta terdaftar, petugas stasiun, pengelola halte, serta tim keamanan gedung publik terverifikasi.",
     },
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FFFCF8] dark:bg-[#18181B] text-zinc-900 dark:text-zinc-100 transition-colors">
+    <div className="min-h-screen flex flex-col bg-canvas text-main-text selection:bg-orange-500/20 selection:text-orange-600 transition-colors">
       <PublicNavbar />
 
-      <main className="flex-1" id="home">
-        {/* ==================== HERO SECTION ==================== */}
-        <section className="relative pt-12 pb-20 md:pt-20 md:pb-28 overflow-hidden border-b border-zinc-200/80 dark:border-zinc-800">
-          {/* Subtle Ambient Tint Grid */}
-          <div className="absolute inset-0 bg-[radial-gradient(#FB923C_1px,transparent_1px)] [background-size:24px_24px] opacity-[0.06] pointer-events-none" />
+      <main className="flex-1">
+        {/* HERO SECTION */}
+        <section className="relative px-4 sm:px-6 pt-12 sm:pt-20 pb-16 sm:pb-24 max-w-[1320px] mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            {/* Left Narrative */}
+            <div className="lg:col-span-7 space-y-6 text-left">
+              <Badge variant="verified" size="md" className="gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <span className="font-semibold text-xs tracking-wide uppercase">
+                  {locale === "en"
+                    ? "Community Lost & Found"
+                    : "Ekosistem Lost & Found Terpercaya"}
+                </span>
+              </Badge>
 
-          <div className="max-w-[1440px] mx-auto px-4 sm:px-6 relative">
-            <div className="text-center max-w-3xl mx-auto mb-14">
-              {/* Civic Trust Pill */}
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-xs font-semibold mb-6">
-                <ShieldCheck className="w-4 h-4 text-orange-500" />
-                <span>Jaringan Temu Kembali Fasilitas Publik &amp; Kampus Nasional</span>
-              </div>
-
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[52px] font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight mb-6 leading-[1.15]">
-                Barang Hilang atau Ditemukan? <span className="text-orange-500">MuaraKu</span> Titik Temunya.
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-zinc-950 dark:text-white leading-[1.08]">
+                {locale === "en" ? (
+                  <>
+                    A safe meeting point for what has been{" "}
+                    <span className="text-[#FB923C]">separated.</span>
+                  </>
+                ) : (
+                  <>
+                    Titik temu bagi yang{" "}
+                    <span className="text-[#FB923C]">terpisah.</span>
+                  </>
+                )}
               </h1>
 
-              <p className="text-base sm:text-lg text-zinc-600 dark:text-zinc-300 mb-8 leading-relaxed max-w-2xl mx-auto">
-                Platform sipil dan komunitas terpercaya Indonesia untuk melaporkan, mencocokkan, dan mengembalikan barang tertinggal dengan aman tanpa rasa was-was penipuan.
+              <p className="text-base sm:text-lg text-zinc-600 dark:text-zinc-300 max-w-xl leading-relaxed">
+                {locale === "en"
+                  ? "A modern community platform for reporting, discovering, and verifying lost items safely across Indonesian campuses and public spaces — free from ransoms and scams."
+                  : "Platform komunitas modern untuk melaporkan, mencari, dan memverifikasi barang hilang secara aman di lingkungan kampus dan ruang publik Indonesia — bebas penipuan dan tanpa tebusan."}
               </p>
 
-              {/* Action CTAs */}
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
-                <button
-                  onClick={() => openAuthModal("login")}
-                  className="w-full sm:w-auto h-12 px-7 rounded-xl bg-orange-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:bg-orange-600 shadow-sm transition-all transform hover:-translate-y-0.5"
-                >
-                  <Search className="w-4 h-4" />
-                  <span>Cari &amp; Lapor Barang</span>
-                </button>
-
-                <a
-                  href="#cara-kerja"
-                  className="w-full sm:w-auto h-12 px-6 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-zinc-50 dark:hover:bg-zinc-700/60 transition-all"
-                >
-                  <span>Pelajari Cara Kerja</span>
-                  <ArrowRight className="w-4 h-4" />
-                </a>
-
-                <Link
-                  href="/app"
-                  className="w-full sm:w-auto h-12 px-5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-semibold text-sm flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <Compass className="w-4 h-4" />
-                  <span>Jelajahi Feed Publik</span>
-                </Link>
-              </div>
-            </div>
-
-            {/* ==================== HERO INTERACTIVE WORKFLOW PREVIEW ==================== */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-2xl p-6 lg:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] max-w-5xl mx-auto relative">
-              {/* Top Bar */}
-              <div className="flex flex-wrap items-center justify-between pb-6 border-b border-zinc-100 dark:border-zinc-800 gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-rose-500/80" />
-                  <div className="w-3 h-3 rounded-full bg-amber-400/80" />
-                  <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
-                  <span className="font-mono text-xs text-zinc-400 ml-2">muaraku.id/live-hub</span>
-                </div>
-
-                <div className="flex-1 max-w-md hidden md:flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 text-xs">
-                  <Search className="w-4 h-4 text-zinc-400" />
-                  <span className="truncate">Cari: &ldquo;Dompet kulit cokelat tertinggal di KRL Manggarai...&rdquo;</span>
-                  <span className="ml-auto px-1.5 py-0.5 rounded bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-[10px] font-mono text-zinc-400">
-                    ⌘F
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>Simulasi Alur Verifikasi</span>
-                </div>
-              </div>
-
-              {/* Matching Engine Cards Comparison (Walkthrough) */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-6 items-center">
-                {/* Sisi Kiri: Laporan Kehilangan (Seeker) */}
-                <div className="md:col-span-5 bg-[#FFFCF8] dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl p-5 relative overflow-hidden">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="px-2.5 py-1 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-bold">
-                      Laporan Hilang #HIL-8291
-                    </span>
-                    <span className="text-xs text-zinc-400 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      <span>20 Menit lalu</span>
-                    </span>
-                  </div>
-
-                  <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 mb-2">
-                    Dompet Lipat Kulit Kartu Identitas
-                  </h3>
-                  <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 mb-4 leading-relaxed">
-                    &ldquo;Terjatuh saat turun di Peron 3 Stasiun Manggarai arah Bogor sekitar jam 07:45 WIB.&rdquo;
-                  </p>
-
-                  <div className="space-y-2 border-t border-zinc-200/60 dark:border-zinc-700/60 pt-3 text-xs">
-                    <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
-                      <MapPin className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>KRL Commuter Line • Manggarai</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
-                      <Lock className="w-3.5 h-3.5 text-zinc-400" />
-                      <span className="italic">Ciri rahasia tersimpan di vault verifikasi</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-zinc-200/60 dark:border-zinc-700/60 flex items-center justify-between text-xs text-zinc-500">
-                    <span>Pelapor: <strong className="text-zinc-800 dark:text-zinc-200">Budi S.</strong></span>
-                    <span className="font-mono text-[11px]">ID: W-4412</span>
-                  </div>
-                </div>
-
-                {/* Bagian Tengah: Match Connector */}
-                <div className="md:col-span-2 flex flex-col items-center justify-center py-2 text-center">
-                  <div className="w-12 h-12 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-md">
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                  <span className="mt-2 text-xs font-bold text-orange-600 dark:text-orange-400">
-                    Pencocokan Cerdas
-                  </span>
-                  <span className="text-[11px] text-zinc-400 mt-0.5">
-                    Ilustrasi Alur Sinergi
-                  </span>
-                </div>
-
-                {/* Sisi Kanan: Laporan Temuan (Finder - Staff Verified) */}
-                <div className="md:col-span-5 bg-white dark:bg-zinc-800/90 border-2 border-orange-500/30 rounded-xl p-5 relative shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
-                      Temuan #TEM-3104
-                    </span>
-                    {/* Verified Staff Badge */}
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs font-bold border border-amber-500/20">
-                      <BadgeCheck className="w-3.5 h-3.5" />
-                      <span>Petugas Terverifikasi</span>
-                    </span>
-                  </div>
-
-                  <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 mb-2">
-                    Dompet Pria Warna Cokelat Tua
-                  </h3>
-                  <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 mb-4 leading-relaxed">
-                    &ldquo;Ditemukan di bangku tunggu peron 3 arah Depok. Diserahkan ke Ruang Pos Pelayanan Stasiun.&rdquo;
-                  </p>
-
-                  <div className="space-y-2 border-t border-zinc-200/60 dark:border-zinc-700/60 pt-3 text-xs">
-                    <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
-                      <Building className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>Posko Satpam Stasiun Manggarai</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Aman dalam brankas dinas fasilitas</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-zinc-200/60 dark:border-zinc-700/60 flex items-center justify-between text-xs">
-                    <span className="text-zinc-500">Penyimpan: <strong className="text-zinc-800 dark:text-zinc-200">Petugas Stasiun</strong></span>
-                    <button
-                      onClick={() => openAuthModal("login")}
-                      className="px-3 py-1 rounded-lg bg-orange-500 text-white font-semibold text-xs hover:bg-orange-600 transition-colors"
-                    >
-                      Klaim Milik
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Explanatory footer note */}
-              <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800 text-center">
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  <ShieldCheck className="w-3.5 h-3.5 inline mr-1 text-emerald-500" />
-                  Alur di atas merupakan ilustrasi tata kelola verifikasi: kuis kepemilikan privat melindungi barang dari klaim palsu sebelum nomor kontak dibuka.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ==================== DUA PILAR EKOSISTEM (ABOUT) ==================== */}
-        <section className="py-20 bg-white dark:bg-[#121214] border-b border-zinc-200/80 dark:border-zinc-800 transition-colors" id="about">
-          <div className="max-w-[1440px] mx-auto px-4 sm:px-6">
-            <div className="text-center max-w-2xl mx-auto mb-16 space-y-3">
-              <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-orange-500/10 text-orange-600 dark:text-orange-400">
-                Arsitektur Dua Sisi
-              </span>
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-                Ekosistem Adil bagi Pencari dan Penemu
-              </h2>
-              <p className="text-sm sm:text-base text-zinc-600 dark:text-zinc-400">
-                MuaraKu menghilangkan rasa cemas dari kedua belah pihak dengan alur validasi yang melindungi identitas serta kepemilikan riil barang berharga.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-              {/* Pilar Seeker */}
-              <div className="bg-[#FFFCF8] dark:bg-zinc-900/70 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 hover:shadow-md transition-all space-y-4">
-                <div className="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-600 dark:text-orange-400">
-                  <Search className="w-6 h-6" />
-                </div>
-                <span className="inline-block px-3 py-1 rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 text-xs font-semibold">
-                  Pilar 01 • Sisi Pencari (Seeker)
-                </span>
-                <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
-                  Laporkan Kehilangan, Cocokkan Otomatis dengan Pencarian Aman
-                </h3>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  Tidak perlu lagi memposting nomor HP atau foto KTP di media sosial terbuka. Cukup laporkan deskripsi umum dan simpan ciri rahasia di brankas terenkripsi untuk proses pencocokan.
-                </p>
-                <ul className="space-y-3 text-sm text-zinc-600 dark:text-zinc-400 pt-2 border-t border-zinc-200/60 dark:border-zinc-800">
-                  <li className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                    <span>Notifikasi langsung saat barang berkarakteristik mirip didaftarkan.</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                    <span>Terlindungi dari pesan spam penipuan bermodus meminta uang pulsa atau tebusan palsu.</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                    <span>Bukti pelaporan digital resmi untuk keperluan pos pengamanan atau kepolisian.</span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Pilar Finder */}
-              <div className="bg-[#FFFCF8] dark:bg-zinc-900/70 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 hover:shadow-md transition-all space-y-4">
-                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                  <Package className="w-6 h-6" />
-                </div>
-                <span className="inline-block px-3 py-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
-                  Pilar 02 • Sisi Penemu (Finder)
-                </span>
-                <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
-                  Amankan Barang Temuan, Validasi Bukti Rahasia, Titipkan ke Posko Resmi
-                </h3>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  Niat baik Anda dijamin aman. Cukup titipkan barang temuan di pos mitra resmi MuaraKu terdekat tanpa perlu repot menyimpan atau menghadapi penipu beritikad buruk.
-                </p>
-                <ul className="space-y-3 text-sm text-zinc-600 dark:text-zinc-400 pt-2 border-t border-zinc-200/60 dark:border-zinc-800">
-                  <li className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                    <span>Verifikasi kepemilikan otomatis: hanya pemilik asli yang bisa menjawab kuis rahasia.</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                    <span>Integrasi drop-point pos satpam stasiun, halte TransJakarta, kantin &amp; perpustakaan.</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                    <span>Apresiasi Civic Karma atas kontribusi kejujuran masyarakat sipil.</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ==================== CARA KERJA (3 LANGKAH TRANSPARAN) ==================== */}
-        <section className="py-20 bg-[#FFFCF8] dark:bg-[#18181B] border-b border-zinc-200/80 dark:border-zinc-800 transition-colors" id="cara-kerja">
-          <div className="max-w-[1440px] mx-auto px-4 sm:px-6">
-            <div className="text-center max-w-2xl mx-auto mb-16 space-y-3">
-              <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-orange-500/10 text-orange-600 dark:text-orange-400">
-                Metode MuaraKu
-              </span>
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-                3 Langkah Temu Kembali yang Bersih &amp; Transparan
-              </h2>
-              <p className="text-sm sm:text-base text-zinc-600 dark:text-zinc-400">
-                Didesain khusus untuk menggantikan keruwetan grup chat dan postingan medsos yang rentan manipulasi.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-              {/* Step 1 */}
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 relative space-y-4">
-                <div className="w-10 h-10 rounded-full bg-orange-500 text-white font-bold flex items-center justify-center text-lg">
-                  1
-                </div>
-                <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">
-                  Buat Laporan Cepat (Bahasa Sehari-hari N2L)
-                </h3>
-                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  Tulis kronologi seperti bercerita ke teman: &ldquo;Tas punggung hitam laptop tertinggal di gerbong 5 KRL Manggarai jam 6 sore&rdquo;. Sistem mengekstrak waktu, lokasi, dan objek secara otomatis.
-                </p>
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/80 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60 font-mono text-[11px] text-zinc-600 dark:text-zinc-300">
-                  Natural Language Parsing &rarr; Geo-tag: Manggarai &rarr; Objek: Ransel Kerja
-                </div>
-              </div>
-
-              {/* Step 2 */}
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 relative space-y-4">
-                <div className="w-10 h-10 rounded-full bg-orange-500 text-white font-bold flex items-center justify-center text-lg">
-                  2
-                </div>
-                <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">
-                  Verifikasi Kepemilikan Privat
-                </h3>
-                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  Ciri rahasia (seperti isi dompet, gantungan kunci di dalam, atau 4 digit nomor) tidak pernah diumbar ke publik. Hanya pemilik sah yang dapat menjawab kuis verifikasi rahasia.
-                </p>
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/80 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60 font-mono text-[11px] text-zinc-600 dark:text-zinc-300">
-                  Privasi Terjaga • Zero-Knowledge Owner Clues
-                </div>
-              </div>
-
-              {/* Step 3 */}
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 relative space-y-4">
-                <div className="w-10 h-10 rounded-full bg-orange-500 text-white font-bold flex items-center justify-center text-lg">
-                  3
-                </div>
-                <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">
-                  Serah Terima di Pos Petugas Terverifikasi
-                </h3>
-                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  Tidak ada pertemuan di tempat sunyi. Penyerahan dilakukan langsung di pos satpam stasiun, pos pengamanan kampus, atau loket stasiun mitra dengan tanda serah terima digital resmi.
-                </p>
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/80 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60 font-mono text-[11px] text-zinc-600 dark:text-zinc-300">
-                  Lokasi: Pos Pengamanan Resmi • Legalitas Aman
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ==================== BENTO INFRASTRUKTUR TEKNOLOGI & TRUST ==================== */}
-        <section className="py-20 bg-white dark:bg-[#121214] border-b border-zinc-200/80 dark:border-zinc-800 transition-colors">
-          <div className="max-w-[1440px] mx-auto px-4 sm:px-6">
-            <div className="text-center max-w-2xl mx-auto mb-16 space-y-3">
-              <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-orange-500/10 text-orange-600 dark:text-orange-400">
-                Infrastruktur Sipil
-              </span>
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-                Kepercayaan Didukung Teknologi Bersih
-              </h2>
-              <p className="text-sm sm:text-base text-zinc-600 dark:text-zinc-400">
-                Dibangun tanpa iklan menjebak, tanpa spekulasi berbayar, berfokus murni pada utilitas sosial dan kenyamanan warga.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-              {/* Bento 1: N2L Search (2 cols on md) */}
-              <div className="md:col-span-2 bg-[#FFFCF8] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 flex flex-col justify-between">
-                <div>
-                  <div className="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-600 dark:text-orange-400 mb-6">
-                    <Search className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
-                    Natural Language Search (N2L) Bahasa Indonesia
-                  </h3>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6 leading-relaxed">
-                    Tak perlu mencari berdasarkan format kaku. Ketikkan apa yang Anda ingat dengan bahasa kasual, sinonim sehari-hari, atau nama rute transportasi (KRL Manggarai, JakLingko 31, Gedung D Kampus).
-                  </p>
-                </div>
-                <div className="bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-xl p-4 flex items-center justify-between text-xs font-mono">
-                  <span className="text-zinc-600 dark:text-zinc-300">Query: &ldquo;earphone putih casing ada tempelan kucing di peron 1&rdquo;</span>
-                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">&rarr; Terindeks Akurat</span>
-                </div>
-              </div>
-
-              {/* Bento 2: Petugas Lokasi Terverifikasi */}
-              <div className="bg-[#FFFCF8] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 flex flex-col justify-between">
-                <div>
-                  <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 mb-6">
-                    <UserCheck className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2">
-                    Petugas Lokasi Terverifikasi
-                  </h3>
-                  <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                    Tanda pengenal kuning resmi untuk petugas stasiun, sekuriti mal, dan koordinator kampus yang menjaga fisik barang temuan.
-                  </p>
-                </div>
-                <div className="mt-6 flex items-center gap-2 pt-4 border-t border-zinc-200/60 dark:border-zinc-800 text-xs font-semibold text-amber-700 dark:text-amber-400">
-                  <BadgeCheck className="w-4 h-4" />
-                  <span>Otoritas Fisik Terdaftar</span>
-                </div>
-              </div>
-
-              {/* Bento 3: Anti-Tebusan */}
-              <div className="bg-[#FFFCF8] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 flex flex-col justify-between">
-                <div>
-                  <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400 mb-6">
-                    <Shield className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2">
-                    Anti-Tebusan &amp; Anti-Pemerasan
-                  </h3>
-                  <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                    Sistem ketat mendeteksi dan memblokir pihak yang meminta transfer uang muka atau biaya tebusan sebelum barang diverifikasi secara resmi.
-                  </p>
-                </div>
-                <div className="mt-6 flex items-center gap-2 pt-4 border-t border-zinc-200/60 dark:border-zinc-800 text-xs font-semibold text-rose-600 dark:text-rose-400">
-                  <Lock className="w-4 h-4" />
-                  <span>Protokol Nol-Biaya Wajib</span>
-                </div>
-              </div>
-
-              {/* Bento 4: Privasi Maksimal (2 cols on md) */}
-              <div className="md:col-span-2 bg-[#FFFCF8] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 flex flex-col justify-between">
-                <div>
-                  <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-6">
-                    <ShieldCheck className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
-                    Privasi Maksimal &amp; Perlindungan Data Warga
-                  </h3>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6 leading-relaxed">
-                    Identitas KTP, nomor WhatsApp pribadi, dan alamat tinggal tidak dibuka di ruang publik. Komunikasi dilakukan melalui chat terenkripsi sampai validasi serah terima disepakati.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-4 border-t border-zinc-200/60 dark:border-zinc-800 text-xs text-zinc-600 dark:text-zinc-400">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <span>No Spam Call</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <span>Masking Nomor HP</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <span>Audit Log Serah Terima</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ==================== COMMUNITY PREVIEW FEED (REAL DATABASE) ==================== */}
-        <section className="py-20 bg-[#FFFCF8] dark:bg-[#18181B] border-b border-zinc-200/80 dark:border-zinc-800 transition-colors" id="eksplorasi">
-          <div className="max-w-[1440px] mx-auto px-4 sm:px-6">
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
-              <div>
-                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-orange-500/10 text-orange-600 dark:text-orange-400">
-                  Laporan Terkini
-                </span>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight mt-2">
-                  Jelajahi Laporan Komunitas Nyata
-                </h2>
-                <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-                  Semua data berasal langsung dari sistem basis data riil tanpa rekayasa.
-                </p>
-              </div>
-
-              {/* Filter Pills */}
-              <div className="flex items-center gap-2 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/60 dark:border-zinc-700/60">
-                <button
-                  onClick={() => setFeedFilter("all")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                    feedFilter === "all"
-                      ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                  }`}
-                >
-                  {t.discover.filter_all}
-                </button>
-                <button
-                  onClick={() => setFeedFilter("lost")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                    feedFilter === "lost"
-                      ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                  }`}
-                >
-                  {t.discover.filter_lost}
-                </button>
-                <button
-                  onClick={() => setFeedFilter("found")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                    feedFilter === "found"
-                      ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                  }`}
-                >
-                  {t.discover.filter_found}
-                </button>
-              </div>
-            </div>
-
-            {/* Cards Grid / Empty State */}
-            {loadingReports ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[1, 2, 3].map((idx) => (
-                  <div
-                    key={idx}
-                    className="h-64 rounded-2xl bg-zinc-100 dark:bg-zinc-800/60 animate-pulse border border-zinc-200/60 dark:border-zinc-700/60"
-                  />
-                ))}
-              </div>
-            ) : reports.length === 0 ? (
-              <div className="text-center py-16 px-4 bg-white dark:bg-zinc-900/60 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 max-w-2xl mx-auto space-y-4">
-                <div className="w-14 h-14 rounded-2xl bg-orange-500/10 text-orange-500 flex items-center justify-center mx-auto">
-                  <Inbox className="w-7 h-7" />
-                </div>
-                <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
-                  Belum Ada Laporan Aktif
-                </h3>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
-                  Basis data saat ini belum memiliki laporan untuk kategori ini. Jadilah yang pertama melaporkan barang hilang atau ditemukan.
-                </p>
-                <div className="pt-2">
-                  <button
-                    onClick={() => openAuthModal("login")}
-                    className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl text-xs shadow-sm transition-all"
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3.5 pt-2">
+                <Link href="/app/seeker">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    leftIcon={<Search className="w-4 h-4" />}
                   >
-                    Mulai Buat Laporan
-                  </button>
+                    {locale === "en" ? "Search Lost Items" : "Cari Barang Hilang"}
+                  </Button>
+                </Link>
+
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => openAuthModal("login")}
+                  leftIcon={<PlusCircle className="w-4 h-4 text-[#FB923C]" />}
+                >
+                  {locale === "en" ? "Report Found Item" : "Laporkan Temuan"}
+                </Button>
+              </div>
+
+              {/* Key Trust Badges */}
+              <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div className="flex items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                  <span>{locale === "en" ? "Anti-Scam Verified" : "Verifikasi Anti-Scam"}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  <Lock className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                  <span>{locale === "en" ? "Concealed Clues" : "Ciri Rahasia Terjaga"}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 col-span-2 sm:col-span-1">
+                  <MapPin className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
+                  <span>{locale === "en" ? "Campus & Transit Nodes" : "Pos Lokasi Terdaftar"}</span>
                 </div>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {reports.slice(0, 6).map((report) => (
-                  <ReportCard
-                    key={report.id}
-                    report={report}
-                    onChatClick={() => openAuthModal("login")}
-                  />
-                ))}
-              </div>
-            )}
+            </div>
 
-            {/* View Full Discover Button */}
-            <div className="mt-12 text-center">
-              <Link
-                href="/app"
-                className="inline-flex items-center gap-2 px-6 py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl text-sm shadow-sm transition-colors"
-              >
-                <span>Buka Seluruh Discover Feed</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
+            {/* Right Interactive Prototype Preview */}
+            <div className="lg:col-span-5">
+              <Card padding="lg" className="border-zinc-200 dark:border-zinc-800 shadow-lg space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                      {locale === "en" ? "Live Feed Prototype" : "Pratinjau Aktivitas Komunitas"}
+                    </span>
+                  </div>
+                  <Badge variant="lost">Lost &amp; Found</Badge>
+                </div>
+
+                {/* Skeletons displaying honest layout expectation */}
+                <div className="space-y-3">
+                  <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                        {locale === "en" ? "Dompet Lipat Hitam" : "Dompet Kulit Hitam"}
+                      </span>
+                      <Badge variant="lost" size="sm">Hilang</Badge>
+                    </div>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                      {locale === "en"
+                        ? "Reported near Central Library. Verification quiz required for claims."
+                        : "Tercecer di sekitar Perpustakaan Pusat. Kuis verifikasi kepemilikan aktif."}
+                    </p>
+                    <div className="flex items-center gap-2 text-[11px] text-zinc-400 pt-1">
+                      <Lock className="w-3 h-3 text-amber-500" />
+                      <span>{locale === "en" ? "1 private clue protected" : "1 ciri rahasia terlindungi"}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                        {locale === "en" ? "Kunci Motor Honda" : "Kunci Motor Vario"}
+                      </span>
+                      <Badge variant="found" size="sm">Ditemukan</Badge>
+                    </div>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                      {locale === "en"
+                        ? "Safely stored at Security Post Gate 1."
+                        : "Diamankan di Pos Sekuriti Pintu Gerbang Utama."}
+                    </p>
+                    <div className="flex items-center gap-2 text-[11px] text-emerald-600 dark:text-emerald-400 pt-1 font-medium">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>{locale === "en" ? "Location officer verified" : "Petugas pos terverifikasi"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 text-center">
+                  <Link
+                    href="/app"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#FB923C] hover:text-[#EA580C] transition-colors"
+                  >
+                    <span>{locale === "en" ? "Explore full network" : "Buka beranda aplikasi"}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </Card>
             </div>
           </div>
         </section>
 
-        {/* ==================== FAQ ACCORDION ==================== */}
-        <section className="py-20 bg-white dark:bg-[#121214] border-b border-zinc-200/80 dark:border-zinc-800 transition-colors" id="support">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6">
-            <div className="text-center mb-12 space-y-3">
-              <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-orange-500/10 text-orange-600 dark:text-orange-400">
-                Tanya Jawab
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-                Pertanyaan Umum Seputar MuaraKu
+        {/* THREE FOUNDATION PILLARS */}
+        <section className="px-4 sm:px-6 py-16 bg-white dark:bg-[#18181B] border-y border-zinc-200/80 dark:border-zinc-800">
+          <div className="max-w-[1320px] mx-auto space-y-12">
+            <div className="text-center max-w-2xl mx-auto space-y-3">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 dark:text-white tracking-tight">
+                {locale === "en"
+                  ? "Engineered for community trust"
+                  : "Dirancang untuk integritas & rasa aman"}
               </h2>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                Transparansi prosedur untuk menjamin setiap proses temu kembali berjalan dengan rasa aman.
+              <p className="text-sm sm:text-base text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                {locale === "en"
+                  ? "Traditional social media feeds expose sensitive details that invite scammers. MuaraKu solves this with private verification."
+                  : "Grup chat dan medsos biasa mengekspos foto dan detail lengkap yang memancing penipuan. MuaraKu memulihkan rasa percaya melalui protokol verifikasi rahasia."}
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card padding="lg" className="space-y-3 bg-[#F8F9FA] dark:bg-[#121214]">
+                <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center font-bold text-sm">
+                  01
+                </div>
+                <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  {locale === "en" ? "Concealed Secret Clues" : "Ciri Rahasia Tersembunyi"}
+                </h3>
+                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                  {locale === "en"
+                    ? "Finders conceal 1–2 distinctive features. Scammers cannot guess what they cannot see."
+                    : "Penemu menyembunyikan detail pembeda (warna kartu, isi saku rahasia). Penipu tidak dapat mengklaim barang yang ciri khasnya tidak dipublikasikan."}
+                </p>
+              </Card>
+
+              <Card padding="lg" className="space-y-3 bg-[#F8F9FA] dark:bg-[#121214]">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-sm">
+                  02
+                </div>
+                <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  {locale === "en" ? "Zero Ransom Guarantee" : "Bebas Pungutan & Tebusan"}
+                </h3>
+                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                  {locale === "en"
+                    ? "Platform policy strictly forbids extortion or ransom demands. Violators are banned permanently."
+                    : "Kebijakan platform melarang keras segala bentuk permintaan uang tebusan atau transfer biaya. Pelanggar langsung diblokir permanen."}
+                </p>
+              </Card>
+
+              <Card padding="lg" className="space-y-3 bg-[#F8F9FA] dark:bg-[#121214]">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm">
+                  03
+                </div>
+                <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  {locale === "en" ? "Verified Custody Desks" : "Titik Serah Terima Terverifikasi"}
+                </h3>
+                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                  {locale === "en"
+                    ? "Handover can be routed through verified security posts, campus desks, or registered transit offices."
+                    : "Pengembalian barang dapat dititipkan melalui pos sekuriti, halte, atau loket kampus terverifikasi agar aman bagi kedua pihak."}
+                </p>
+              </Card>
+            </div>
+          </div>
+        </section>
+
+        {/* COMMUNITY SKELETON / FEED PATTERN PREVIEW */}
+        <section className="px-4 sm:px-6 py-16 max-w-[1320px] mx-auto space-y-8">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-extrabold text-zinc-950 dark:text-white tracking-tight">
+                {locale === "en" ? "Community Activity Pattern" : "Pola Aliran Laporan Komunitas"}
+              </h2>
+              <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                {locale === "en"
+                  ? "Standard loading & empty states ready for core report integration."
+                  : "Pola skeleton responsif siap menerima data laporan riil di Sesi 3."}
+              </p>
+            </div>
+            <Link href="/app">
+              <Button variant="outline" size="sm" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
+                {locale === "en" ? "Go to Main App" : "Menuju Beranda"}
+              </Button>
+            </Link>
+          </div>
+
+          {/* Clean Skeleton Feed Demonstration */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <SkeletonFeed count={3} />
+          </div>
+        </section>
+
+        {/* FREQUENTLY ASKED QUESTIONS */}
+        <section className="px-4 sm:px-6 py-16 bg-white dark:bg-[#18181B] border-t border-zinc-200/80 dark:border-zinc-800">
+          <div className="max-w-3xl mx-auto space-y-8">
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 dark:text-white tracking-tight">
+                {locale === "en" ? "Frequently Asked Questions" : "Pertanyaan yang Sering Diajukan"}
+              </h2>
+              <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
+                {locale === "en"
+                  ? "Clear policies on trust, verification, and privacy."
+                  : "Transparansi seputar keamanan, privasi data, dan tata kelola MuaraKu."}
+              </p>
+            </div>
+
+            <div className="space-y-3">
               {faqs.map((faq, idx) => {
                 const isOpen = openFaq === idx;
                 return (
                   <div
                     key={idx}
-                    className="border border-zinc-200 dark:border-zinc-800 rounded-2xl bg-[#FFFCF8] dark:bg-zinc-900 overflow-hidden"
+                    className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-[#F8F9FA] dark:bg-[#121214] overflow-hidden transition-colors"
                   >
                     <button
                       onClick={() => setOpenFaq(isOpen ? null : idx)}
-                      className="w-full p-5 text-left flex items-center justify-between gap-4 font-semibold text-zinc-900 dark:text-zinc-100 hover:text-orange-500 transition-colors"
+                      className="w-full flex items-center justify-between p-4 sm:p-5 text-left text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-100 min-h-[44px] cursor-pointer"
                     >
-                      <span className="text-sm sm:text-base">{faq.q}</span>
+                      <span>{faq.q}</span>
                       <ChevronDown
-                        className={`w-5 h-5 text-zinc-400 flex-shrink-0 transition-transform ${
-                          isOpen ? "rotate-180 text-orange-500" : ""
+                        className={`w-4 h-4 text-zinc-400 transition-transform duration-200 ${
+                          isOpen ? "transform rotate-180" : ""
                         }`}
                       />
                     </button>
                     {isOpen && (
-                      <div className="px-5 pb-5 text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed border-t border-zinc-100 dark:border-zinc-800/60 pt-4">
+                      <div className="px-4 pb-5 sm:px-5 sm:pb-5 text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed border-t border-zinc-200/50 dark:border-zinc-800/50 pt-3">
                         {faq.a}
                       </div>
                     )}
@@ -661,33 +337,29 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ==================== FINAL CTA BANNER ==================== */}
-        <section className="py-20 bg-orange-500 text-white">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center space-y-6">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/20 text-white text-xs font-semibold">
-              <ShieldCheck className="w-4 h-4" />
-              <span>Semangat Gotong Royong Warga Digital</span>
+        {/* BOTTOM ACTION BANNER */}
+        <section className="px-4 sm:px-6 py-16 max-w-[1320px] mx-auto">
+          <div className="rounded-3xl bg-zinc-950 dark:bg-[#18181B] text-white p-8 sm:p-14 border border-zinc-800 flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
+            <div className="space-y-3 max-w-xl">
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                {locale === "en"
+                  ? "Ready to find or return an item?"
+                  : "Mulai bantu temukan kembali yang hilang"}
+              </h2>
+              <p className="text-sm text-zinc-400 leading-relaxed">
+                {locale === "en"
+                  ? "Join the verified community network. Together, we make public spaces and campuses safer."
+                  : "Bergabung bersama ribuan mahasiswa dan warga kampus yang saling peduli dan menjaga integritas lingkungan."}
+              </p>
             </div>
-
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-              Bantu Komunitasmu Menemukan Kembali Yang Berharga.
-            </h2>
-            <p className="text-base sm:text-lg text-orange-100 max-w-xl mx-auto">
-              Bergabung dengan ribuan warga jujur, petugas stasiun, dan civitas kampus. Menghadirkan kembali ketenangan di ruang publik kita.
-            </p>
-            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Button
+                variant="primary"
+                size="lg"
                 onClick={() => openAuthModal("register")}
-                className="w-full sm:w-auto px-8 py-4 bg-white text-orange-600 hover:bg-orange-50 font-bold rounded-2xl shadow-lg text-sm sm:text-base transition-all transform hover:-translate-y-0.5"
               >
-                Daftar Gratis Warga
-              </button>
-              <button
-                onClick={() => openAuthModal("login")}
-                className="w-full sm:w-auto px-7 py-4 bg-orange-600/80 hover:bg-orange-600 text-white font-semibold rounded-2xl border border-white/20 text-sm sm:text-base transition-all"
-              >
-                Masuk ke Akun
-              </button>
+                {locale === "en" ? "Register Now" : "Daftar Sekarang"}
+              </Button>
             </div>
           </div>
         </section>
