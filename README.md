@@ -2,11 +2,26 @@
 
 > **The Safe Haven for Lost & Found**
 
+**MuaraKu** adalah platform *Lost & Found* sipil dan komunitas terpercaya di Indonesia yang dirancang khusus untuk ekosistem fasilitas publik, transportasi, dan kampus. Mengusung antarmuka yang bersih (*Civic Minimalist Design*), sistem verifikasi privasi tinggi, serta asisten cerdas, MuaraKu hadir sebagai solusi aman dalam menjembatani penemu dan pemilik barang hilang tanpa rasa cemas terhadap penipuan.
+
 MuaraKu is an AI-assisted lost-and-found platform designed to connect people who have lost belongings with people who have found them through a safer, more organized, and community-driven digital ecosystem.
 
 Built with a focus on trust, privacy, and accessibility, MuaraKu aims to simplify the process of reporting lost items, discovering found belongings, and reconnecting people with their property.
 
 ## Overview
+
+## ✨ Fitur Utama (Core Features)
+
+- 🔒 **Perlindungan Akses & Rute Otentikasi**  
+  Seluruh area operasional `/app/*` dan konsol moderator `/admin/*` dilindungi middleware sesi terenkripsi dengan alur masuk aman.
+- 🛡️ **Verifikasi Kepemilikan Privat (Anti-Fraud)**  
+  Ciri rahasia barang (nomor seri, isi saku tersembunyi, gantungan khusus) disimpan di brankas privat dan tidak pernah diumbar ke publik. Pengklaim wajib menjawab kuis kepemilikan sebelum nomor kontak dibuka.
+- 🌐 **Integritas Data Riil (Zero Fake Activity)**  
+  Menjunjung integritas sipil: tidak ada metrik palsu atau laporan mock yang menyamar sebagai aktivitas aktif saat database kosong. Setiap halaman menampilkan *genuine empty state* yang informatif.
+- 💬 **Obrolan Komunitas Realtime**  
+  Ruang percakapan komunitas global yang terhubung langsung ke WebSocket Supabase Realtime dengan moderasi transparan.
+- 🌍 **Lokalisasi Sesuai Permintaan (On-Demand Translation)**  
+  Didukung Google Cloud Translation API v2 dengan penyimpanan cache otomatis pada basis data untuk efisiensi penggunaan API.
 
 Losing an item can be stressful. Finding its owner can be just as difficult. Existing approaches often rely on scattered social media posts, unstructured group chats, or manual inquiries.
 
@@ -22,6 +37,17 @@ MuaraKu aims to bring these interactions into one platform, combining structured
 - **Localization** — Support for Indonesian and English, with translation workflows designed around user choice.
 
 *Feature availability and implementation status may change as development progresses.*
+
+## 🛠️ Stack Teknologi (Tech Stack)
+
+- **Frontend & Framework:** Next.js 16 (App Router, Turbopack, React 19)
+- **Bahasa:** TypeScript 5.x (Strict Mode)
+- **Styling & Icons:** Tailwind CSS v4, Lucide Icons
+- **Backend & Database:** Supabase PostgreSQL (28 tabel, Row Level Security, Storage Buckets)
+- **Autentikasi & Keamanan:** Supabase Auth (Email OTP & Google OAuth) + Cloudflare Turnstile
+- **Penerjemahan:** Google Cloud Translation API v2 dengan caching pintar di PostgreSQL
+- **Asisten AI:** Gemini API & OpenAI API
+
 
 ## Technology Stack
 
@@ -63,6 +89,43 @@ muaraku-project/
 ├── DESIGN.md
 └── AGENTS.md
 ```
+
+## 🚀 Memulai Pengembangan Lokal (Getting Started)
+
+### 1. Prasyarat
+- Node.js 20+
+- npm / yarn / pnpm
+
+### 2. Konfigurasi Lingkungan
+Salin berkas konfigurasi template:
+```bash
+cp .env.example .env.local
+```
+Lengkapi nilai kunci Supabase dan kredensial API yang diperlukan di dalam `.env.local`.
+
+### 3. Instalasi & Menjalankan Server
+```bash
+npm install
+npm run dev
+```
+Buka [http://localhost:3000](http://localhost:3000) pada peramban Anda.
+
+### 4. Pengecekan Kualitas Kode
+```bash
+# Validasi tipe TypeScript
+npx tsc --noEmit
+
+# Pengecekan linting ESLint
+npm run lint
+
+# Verifikasi build produksi
+npm run build
+```
+
+---
+
+## 📄 Lisensi & Hak Cipta
+© 2026 MuaraKu (.id). Seluruh hak cipta dilindungi undang-undang.
 
 This is the intended organizational direction; the repository should be updated and verified as the restructuring progresses.
 
