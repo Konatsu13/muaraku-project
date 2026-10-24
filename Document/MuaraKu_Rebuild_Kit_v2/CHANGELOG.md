@@ -1,0 +1,120 @@
+# Changelog — MuaraKu Rebuild Kit
+
+## 2026-10-24 — Perbaikan UI Bottom Navbar Mobile
+- **Navbar tidak lagi `fixed` di luar alur halaman**:
+  - `app/app/layout.tsx` kini memakai app shell `h-[100dvh] overflow-hidden`; header, konten, dan bottom nav berada dalam satu flex column. `main` menjadi satu-satunya area scroll (`overflow-y-auto` + `overscroll-contain`).
+  - Bottom nav dirender in-flow sebagai anak terakhir kolom kanan, sehingga langsung terlihat tanpa menunggu halaman di-scroll dan tidak tertutup address bar mobile.
+  - Posisi scroll `main` direset setiap perubahan `pathname` agar pindah tab selalu mulai dari atas.
+- **Desain dock mobile yang lebih modern**:
+  - [components/layout/AppBottomNav.tsx](file:///d:/Codingan/muaraku-project/components/layout/AppBottomNav.tsx) diubah menjadi floating dock: margin samping 12px, sudut `rounded-2xl`, border halus, `backdrop-blur-xl`, shadow lembut, dan `pb-[max(0.75rem,env(safe-area-inset-bottom))]` agar tidak menabrak batas bawah perangkat ber-notch.
+  - Enam tujuan main menu tetap dipertahankan; setiap item memiliki target sentuh 48px, ikon 18px, label 10px, serta pill oranye lembut untuk status aktif. Settings/Help tetap di luar bottom nav.
+- **Penyesuaian tinggi halaman**:
+  - `app/app/messages/page.tsx` memakai tinggi penuh area konten dengan `flex-1 min-h-0` untuk panel percakapan, sehingga tidak ada scroll ganda.
+  - `app/app/community/page.tsx` memakai `calc(100dvh - 11.75rem - env(safe-area-inset-bottom))` di mobile dan tetap `calc(100vh - 7.5rem)` di desktop.
+  - Widget AI digeser ke `bottom-[calc(6rem+env(safe-area-inset-bottom))]` agar tidak menutupi dock.
+- **Validasi**: `npx tsc --noEmit` -> **PASS**; ESLint file terkait -> **PASS** (hanya warning lama di community); `npm run build` -> **PASS** (23 rute). Tidak ada perubahan database.
+
+## 2026-10-24 — Pesan & Notifikasi Berbasis Data Riil + Bottom Navbar Mobile
+- **Pesan (`app/app/messages/page.tsx`) — mock dihapus total**:
+  - Mengganti seluruh percakapan/pesan hardcoded dengan query Supabase riil ke `conversation_members`, `conversations`, `messages`, `user_profiles`, dan `reports` melalui [lib/supabase/messages.ts](file:///d:/Codingan/muaraku-project/lib/supabase/messages.ts).
+  - Hanya percakapan `direct`/`report` milik pengguna yang dimuat; Global Chat tetap di halaman `/app/community`. Jumlah query dibatasi (maksimal 200 pesan terakhir lintas percakapan, 100 pesan per thread) dan profil peserta di-resolve lewat satu lookup batch `.in("user_id", ...)`, bukan embedding PostgREST yang bergantung pada FK yang tidak ada di schema.
+  - Thread nyata: buka percakapan, muat ulang, kirim pesan (`sender_id = auth.uid()`, `message_kind = "text"`), tampilkan pesan terhapus, dan laporkan pesan melalui `SafetyReportModal`. Error database ditampilkan apa adanya; tidak ada pesan sukses palsu.
+  - Desain mengikuti `DESIGN.md`/taste skill: panel putih/`#121214`, border zinc 1px, aksen oranye terbatas, target sentuh 44px, serta state loading/empty/error yang jujur.
+- **Notifikasi (`app/app/notifications/page.tsx`) — mock dihapus total**:
+  - Membaca baris riil `notifications` milik penerima (RLS `notifications_read_own`), lengkap dengan tipe, judul, isi, waktu relatif, tab Semua/Belum dibaca, dan tautan tujuan berdasarkan `report_id`/tipe notifikasi.
+  - "Tandai dibaca" memanggil route server [app/api/notifications/read/route.ts](file:///d:/Codingan/muaraku-project/app/api/notifications/read/route.ts) yang memverifikasi sesi lalu memperbarui `read_at` hanya untuk `recipient_user_id` milik pengguna. Ini diperlukan karena schema memberi `grant update (read_at)` tetapi belum memiliki UPDATE RLS policy; route ini tidak mengubah schema.
+  - Bell di `AppHeader` tidak lagi memakai titik oranye permanen. Jumlah belum dibaca diambil dari `notifications` (head count dengan RLS) dan disegarkan saat navigasi atau event `muaraku_notifications_changed`.
+- **Bottom navbar mobile**:
+  - Menambahkan [components/layout/AppBottomNav.tsx](file:///d:/Codingan/muaraku-project/components/layout/AppBottomNav.tsx) berisi 6 tujuan main menu saja (Discover, Seeker, Finder, Search, Chat, Pesan), `md:hidden`, target sentuh 44px, `safe-area-inset-bottom`, dan status aktif oranye.
+  - `AppSidebar` kini khusus desktop (`hidden md:flex`); backdrop/menu mobile dan state sidebar mobile dihapus dari [app/app/layout.tsx](file:///d:/Codingan/muaraku-project/app/app/layout.tsx).
+  - `SettingsOverlay` dipindahkan ke layout agar tetap dapat dibuka dari ikon gear di header mobile; Settings/Help tidak dimasukkan ke bottom nav.
+  - Konten utama mendapat padding bawah di mobile dan widget AI digeser ke `bottom-20 md:bottom-5` agar tidak tertutup bottom navbar.
+- **Perbaikan laporan keamanan (`components/safety/SafetyReportModal.tsx`)**:
+  - Sebelumnya memakai kolom yang tidak ada (`reporter_id`, `target_id`, `reason_category`, `status: 'new'`) dan menampilkan sukses palsu saat insert gagal. Sekarang memakai schema riil `safety_reports` (`reporter_user_id`, `target_type` termasuk `item_report`, `target_message_id`/`target_report_id`/`target_user_id`, `reason` enum resmi) dan hanya menampilkan sukses setelah insert benar-benar berhasil; error database ditampilkan.
+- **Kualitas & pengujian**:
+  - `npx tsc --noEmit` -> **PASS** (0 error).
+  - `npm run build` -> **PASS** (23 rute; `/api/notifications/read` terdaftar sebagai route dinamis).
+  - ESLint untuk seluruh file yang diubah pada sesi ini -> **PASS** (0 error).
+  - `npm run lint` penuh -> **FAIL** dengan 9 error `react-hooks/set-state-in-effect` yang sudah ada sebelumnya di `finder`, `app/page`, `profile` (2), `reports/[id]`, `search`, `seeker`, `ClaimModal`, dan `ReportModal`; tidak ada error dari file sesi ini.
+  - Uji integrasi database live -> **BLOCKED**: REST OpenAPI `https://zpoznosjgdcngnptdohl.supabase.co/rest/v1/` mengembalikan `401 Unauthorized` baik dengan publishable key maupun secret key, sehingga alur pesan/notifikasi belum dapat diverifikasi terhadap database remote. Tidak ada SQL/migrasi yang dijalankan.
+- **Proposal schema (belum diterapkan)**:
+  - Tambahkan UPDATE RLS policy pada `public.notifications` agar pengguna dapat menandai `read_at` miliknya sendiri, sehingga route service-role tidak lagi diperlukan.
+  - Pertimbangkan grant/update `last_read_at` pada `public.conversation_members` agar status belum dibaca dapat dipersistenkan; saat ini unread diturunkan dari nilai yang ada.
+
+## 2026-10-24 — Sesi 3: Lost & Found Core (CRUD, Media Storage, Search/Filter, Saved Reports, Claims)
+- **CRUD Laporan Barang Hilang & Temuan (`reports`, `report_private_details`, `report_media`)**:
+  - Mengimplementasikan `createReport`, `updateReport`, `deleteReport`, `fetchReports`, dan `fetchReportById` di [lib/supabase/reports.ts](file:///d:/Codingan/muaraku-project/lib/supabase/reports.ts).
+  - Validasi ketat sesuai database: judul 3–140 karakter, deskripsi 5–5000 karakter, label lokasi <= 200 karakter, kota <= 100 karakter.
+  - Mematuhi schema column grants: insert mengandalkan default database `case_status = 'open'` dan `moderation_status = 'pending_review'`, mencegah pelanggaran izin kolom client.
+  - Ciri rahasia pemilik (`owner_only_clues`) dan kontak privat (`report_private_details`) terlindungi RLS (hanya pemilik yang dapat membaca/menulis). Tidak bocor di feed atau pencarian publik.
+- **Media Upload & Private Storage (`report-images`)**:
+  - Media diunggah ke bucket privat `report-images` dengan konvensi path skema: `<auth.uid()>/<report_id>/<filename>`.
+  - Batas ukuran file 8MB (`8388608` bytes), format gambar `image/jpeg`, `image/png`, `image/webp`.
+  - Menghasilkan signed URLs berjangka waktu (1 jam dengan in-memory cache) melalui `getSignedMediaUrl` untuk memastikan gambar privat dapat ditampilkan tanpa membuka bucket ke publik.
+  - Rollback otomatis: file storage yang telah terunggah dibersihkan jika pencatatan row metadata ke `report_media` gagal.
+- **Discover Feed, Seeker Hub, dan Finder Hub**:
+  - [app/app/page.tsx](file:///d:/Codingan/muaraku-project/app/app/page.tsx): Discover feed dengan filter tipe (Semua, Kehilangan, Temuan), kategori, dan penyortiran waktu kejadian/abjad/terbaru dengan pagination stabil.
+  - [app/app/seeker/page.tsx](file:///d:/Codingan/muaraku-project/app/app/seeker/page.tsx): Hub khusus barang hilang dengan tab "Semua Kehilangan" dan "Laporan Saya".
+  - [app/app/finder/page.tsx](file:///d:/Codingan/muaraku-project/app/app/finder/page.tsx): Hub khusus barang temuan dengan tab "Semua Temuan" dan "Temuan Saya".
+  - Empty state dan loading state murni berbasis query Supabase sungguhan tanpa data mock/palsu.
+- **Detail Laporan & Klaim Kepemilikan (`claims` & `claim_evidence`)**:
+  - [app/app/reports/[id]/page.tsx](file:///d:/Codingan/muaraku-project/app/app/reports/[id]/page.tsx): Menampilkan data publik, badge status, galeri gambar signed URLs, serta panel ciri rahasia khusus pemilik.
+  - Alur klaim menghubungkan 1 laporan temuan (`found`) dengan 1 laporan kehilangan (`lost`) milik claimant. Dicek oleh database trigger bahwa claimant adalah pemilik laporan lost dan bukan pemilik laporan found.
+  - Pengunggahan bukti klaim ke bucket privat `claim-evidence` dengan path `<auth.uid()>/<claim_id>/<filename>` dan row `claim_evidence`. Bukti klaim hanya dapat diakses oleh peserta klaim dan staf moderator.
+  - Menghapus flow translate postingan `/api/translate` sesuai aturan cakupan MVP Sesi 3.
+- **Pencarian Cerdas & Saved Reports (`saved_reports`)**:
+  - [app/app/search/page.tsx](file:///d:/Codingan/muaraku-project/app/app/search/page.tsx): Pencarian kata kunci mencakup kolom full-text (`title`, `description`, `brand`, `color`) serta filter terpisah untuk tipe, kategori, kota, lokasi teks (`location_label`), dan rentang tanggal kejadian dengan pagination stabil.
+  - Tombol simpan laporan pada `ReportCard` dan halaman detail terhubung langsung ke tabel `saved_reports` dengan composite PK `(user_id, report_id)` untuk mencegah duplikasi.
+  - Tab "Laporan Disimpan" di [app/app/profile/page.tsx](file:///d:/Codingan/muaraku-project/app/app/profile/page.tsx).
+- **Desain & Taste Skill v2**:
+  - Mengadopsi prinsip desain anti-slop taste skill v2 (`references/app-screens.md`): True-black flat surface, border 1px subtle, tidak ada gradien berlebih/glow/neon, tipografi bersih dengan angka tabular, touch target minimal 44px, dan status jujur.
+- **Pengujian & Validasi Kualitas**:
+  - Skrip integrasi [scripts/test-sesi3-core.mjs](file:///d:/Codingan/muaraku-project/scripts/test-sesi3-core.mjs) menguji 21 skenario otomatis terhadap database Supabase riil dengan 2 pengguna uji (User A & User B):
+    - CRUD & Ownership isolation (User B tidak bisa edit/delete milik User A) -> **PASS**
+    - RLS Feed Privacy (`pending_review` tidak muncul di feed publik, tapi tampak oleh pemilik) -> **PASS**
+    - RLS Private Details (`report_private_details` terblokir dari pengguna lain) -> **PASS**
+    - Saved Reports (insert, composite PK duplicate rejection, delete, isolasi pengguna) -> **PASS**
+    - Alur klaim valid & pencegahan klaim tidak sah via trigger -> **PASS**
+    - Akses bukti klaim terbatas untuk peserta klaim -> **PASS**
+  - `npx tsc --noEmit` -> **PASS** (0 error).
+  - `npm run build` -> **PASS** (23 rute terkompilasi sukses).
+
+## 2026-10-24 — Sesi 2: Auth, Profil, Role Guard, & Settings Overlay
+- **Supabase Auth Native Integration**:
+  - Mengimplementasikan alur daftar dan login berbasis Email/Password native Supabase Auth.
+  - Mengimplementasikan alur OTP email verifikasi (`signUp` & `verifyOtp`) dengan tipe verifikasi yang aman tanpa sistem/tabel OTP kustom.
+  - Mengintegrasikan penanganan rate-limit/resend cooldown dinamis berdasarkan respons/error aktual dari Supabase Auth (`status: 429`).
+  - Mengintegrasikan Google OAuth dengan penanganan parameter pembatalan (`error`, `error_description`), sanitasi redirect `safeNext`, serta verifikasi sesi sebelum mengarahkan ke dashboard.
+- **Cloudflare Turnstile Bot Defense**:
+  - Membuat API endpoint verifikasi server-side [app/api/auth/verify-turnstile/route.ts](file:///d:/Codingan/muaraku-project/app/api/auth/verify-turnstile/route.ts) menggunakan `TURNSTILE_SECRET_KEY` (secret hanya tersimpan di server).
+  - Membuat komponen [components/auth/TurnstileWidget.tsx](file:///d:/Codingan/muaraku-project/components/auth/TurnstileWidget.tsx) yang terintegrasi pada form login, registrasi, dan lupa kata sandi. Token ditolak di server jika tidak valid atau kadaluarsa.
+- **Admin Provisioning & Role Guard**:
+  - Menyelidiki kendala database: trigger Supabase `muaraku_handle_new_auth_user` saat ini mencari tabel `user_profiles` dan fungsi `muaraku_has_staff_role` mencari `staff_roles` yang belum dieksekusi di database Supabase remote (menyebabkan `Database error saving new user`).
+  - Menyiapkan endpoint server-side [app/api/auth/provision-admin/route.ts](file:///d:/Codingan/muaraku-project/app/api/auth/provision-admin/route.ts) untuk mengotomatisasi penetapan role `admin` bagi `fathan.pageraji@gmail.com` segera setelah tabel skema aktif atau saat login.
+  - Menyiapkan instruksi konkret SQL untuk menjalankan [muaraku_supabase_schema(2).sql](file:///d:/Codingan/muaraku-project/Document/MuaraKu_Rebuild_Kit_v2/database/source/muaraku_supabase_schema(2).sql) di Supabase SQL Editor.
+- **Profil & Settings Overlay**:
+  - Mengimplementasikan `updateProfile` pada [lib/auth/index.tsx](file:///d:/Codingan/muaraku-project/lib/auth/index.tsx) dengan dukungan fallback ganda ke `user_profiles` dan `profiles`.
+  - Mengarahkan rute `/app/settings` langsung kembali ke `/app` per aturan arsitektur `AGENTS.md` (Settings adalah overlay, bukan halaman terpisah).
+  - Menghubungkan fungsi `switchAccount()` pada [components/overlays/SettingsOverlay.tsx](file:///d:/Codingan/muaraku-project/components/overlays/SettingsOverlay.tsx).
+- **Kualitas & Build**: Lolos uji `npm run lint` (0 error) dan `npm run build` (sukses mengompilasi 23 rute statis & dinamis).
+
+## 2026-10-24 — Sesi 1: Audit, Fondasi, & Desain Langsung di Kode
+- **Audit Proyek & Git**: Memeriksa branch `third_version`, status git, dependency (Next.js 16.3.7, React 19.2.8, Tailwind CSS v4, Lucide React), skrip build/lint, serta aset gambar `Document/Inspiration/`.
+- **Eslint Fix**: Mengabaikan folder external `.agents/**` dan `Document/**` pada `eslint.config.mjs` sehingga linting proyek bersih tanpa false-positive hook error dari tool luar.
+- **Design Tokens**: Mengonfigurasi token resmi pada `app/globals.css` sesuai `DESIGN.md` (Canvas `#F8F9FA`/`#121214`, Surface `#FFFFFF`/`#18181B`, Text `#121212`/`#F4F4F5`, Border `#E4E4E7`/`#27272A`, Brand Orange `#FB923C`/`#EA580C`, Focus `#C96A1B`, serta `prefers-reduced-motion` dan accessible focus).
+- **Komponen Dasar (UI Primitives)**: Membuat `Button`, `Input`, `Badge`, dan `Card` di `components/ui/` dengan target sentuh mobile minimal 44px dan focus ring yang jelas.
+- **Pola Standar (Loading / Empty / Error)**: Mengimplementasikan `SkeletonLine`/`SkeletonCard`/`SkeletonFeed` (`LoadingPattern`), `EmptyPattern` (jujur tanpa data palsu), dan `ErrorPattern` dengan tombol retry di `components/ui/patterns/`.
+- **Settings Overlay**: Mengimplementasikan `components/overlays/SettingsOverlay.tsx` yang hanya memuat `Switch Account` dan `Home` (navigasi ke `/`) sesuai keputusan produk di `AGENTS.md`.
+- **Navigasi Berbasis Referensi Pengguna**:
+  - `PublicNavbar` diselaraskan langsung dengan `Document/Inspiration/Navbar.png` (Logo M+MuaraKu, menu Home/About/Support/Terms, switch tema [ ☼ ☾ ], switch bahasa [ 🌐 EN/ID ], dan CTA Login/Open App).
+  - `AppSidebar` diselaraskan dengan `Sidebar-light.png` dan `sidebar-dark.png` (Main Menu, Discover aktif, trigger Settings overlay, dan kartu profil pengguna).
+- **Landing Page Skeleton & Responsif**: Membangun ulang `app/page.tsx` menggunakan prinsip anti-slop taste skill, tanpa template generik, menampilkan arsitektur privasi/keamanan (ciri rahasia terlindungi, tanpa tebusan), FAQ transparan, dan pratinjau skeleton yang jujur.
+- **Build & Quality Check**: Memverifikasi `npm run lint` (0 error) dan `npm run build` (lulus tanpa error TypeScript/Turbopack, seluruh 21 route sukses ter-generate).
+
+## 2026-10-24 — Rebuild Kit v2
+- Menetapkan AI coding agent sebagai perancang dan implementer UI langsung di kode berdasarkan `DESIGN.md` dan referensi yang diberikan pengguna.
+- Menggabungkan instruksi agent/keputusan/arsitektur dalam `AGENTS.md`.
+- Menggabungkan enam prompt sesi dan checklist dalam `BUILD_PLAN.md`.
+- Menggabungkan peta relasi SQL dan catatan review dalam `DATABASE.md`.
+- Mempertahankan SQL yang diunggah pengguna tanpa perubahan dan PRD v1.1 sebagai dokumen referensi.
+- Menegaskan tidak ada translate postingan dan Settings hanya overlay `Switch Account` + `Home`.
