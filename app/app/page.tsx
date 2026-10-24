@@ -1,293 +1,300 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { ReportCard, ReportItem } from "@/components/reports/ReportCard";
-import { fetchReports } from "@/lib/supabase/reports";
-import { useAuth } from "@/lib/auth";
-import { useI18n } from "@/lib/i18n";
+import { ReportCard } from "@/components/reports/ReportCard";
 import {
-  ShieldCheck,
-  Lock,
+  fetchReports,
+  fetchCategories,
+  ReportDetailItem,
+  ReportCategory,
+} from "@/lib/supabase/reports";
+import { useAuth } from "@/lib/auth";
+import {
+  Plus,
+  Filter,
   ArrowUpDown,
   Search,
-  Plus,
-  Loader2,
-  AlertCircle,
-  Package,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { ReportModal } from "@/components/reports/ReportModal";
+import { LoadingPattern } from "@/components/ui/patterns/LoadingPattern";
+import { EmptyPattern } from "@/components/ui/patterns/EmptyPattern";
+import { ErrorPattern } from "@/components/ui/patterns/ErrorPattern";
 
 export default function DiscoverPage() {
-  const router = useRouter();
-  const { user, profile } = useAuth();
-  const { t, locale } = useI18n();
+  const { user } = useAuth();
 
-  const [feedFilter, setFeedFilter] = useState<"all" | "lost" | "found">("all");
+  const [feedType, setFeedType] = useState<"all" | "lost" | "found">("all");
+  const [categories, setCategories] = useState<ReportCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"latest" | "name">("latest");
-  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [sortBy, setSortBy] = useState<"latest" | "title" | "occurred_at">("latest");
+  const [page, setPage] = useState(1);
+
+  const [reports, setReports] = useState<ReportDetailItem[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [modalDefaultType, setModalDefaultType] = useState<"lost" | "found">("lost");
 
-  const categories = [
-    { id: "all", label: "Semua Kategori" },
-    { id: "elektronik", label: "Elektronik" },
-    { id: "dompet", label: "Dompet & Kartu" },
-    { id: "tas", label: "Tas & Ransel" },
-    { id: "kunci", label: "Kunci & Aksesori" },
-    { id: "identitas", label: "Identitas" },
-    { id: "perlengkapan", label: "Perlengkapan" },
-  ];
-
-  const loadData = useCallback(async () => {
-    setErrorMsg(null);
-    const res = await fetchReports({
-      type: feedFilter,
+  // Load categories once
+  useEffect(() => {
+    fetchCategories().then((res) => {
+      if (res.data) setCategories(res.data);
     });
+  }, []);
+
+  const loadData = useCallback(async (isCancelledRef?: { current: boolean }) => {
+    if (isCancelledRef?.current) return;
+    setLoading(true);
+    setErrorMsg(null);
+
+    const res = await fetchReports({
+      type: feedType,
+      category_id: selectedCategory === "all" ? undefined : selectedCategory,
+      sort_by: sortBy,
+      page,
+      pageSize: 12,
+    });
+
+    if (isCancelledRef?.current) return;
 
     if (res.error) {
       setErrorMsg(res.error.message);
+      setReports([]);
+      setTotalCount(0);
+      setTotalPages(1);
     } else {
       setReports(res.data);
+      setTotalCount(res.count);
+      setTotalPages(res.totalPages || 1);
     }
+    if (isCancelledRef?.current) return;
     setLoading(false);
-  }, [feedFilter]);
+  }, [feedType, selectedCategory, sortBy, page]);
 
+  // Load feed reports
   useEffect(() => {
-    let isMounted = true;
-    (async () => {
-      await loadData();
-    })();
+    const isCancelledRef = { current: false };
+    loadData(isCancelledRef);
     return () => {
-      isMounted = false;
+      isCancelledRef.current = true;
     };
   }, [loadData]);
 
-  const filteredReports = reports.filter((report) => {
-    if (selectedCategory !== "all") {
-      const matchCat = report.category
-        .toLowerCase()
-        .includes(selectedCategory.toLowerCase());
-      if (!matchCat) return false;
-    }
-    return true;
-  });
+  const handleOpenCreateModal = (type: "lost" | "found") => {
+    setModalDefaultType(type);
+    setReportModalOpen(true);
+  };
 
-  const sortedReports = [...filteredReports].sort((a, b) => {
-    if (sortBy === "name") {
-      return a.title.localeCompare(b.title);
-    }
-    return 0; // Default: latest (already ordered by created_at desc)
-  });
-
-  const handleChatClick = (report: ReportItem) => {
-    router.push(`/app/messages?reportId=${report.id}`);
+  const handleSavedChange = (reportId: string, isSaved: boolean) => {
+    setReports((prev) =>
+      prev.map((r) => (r.id === reportId ? { ...r, is_saved: isSaved } : r))
+    );
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8 animate-fade-in">
-      {/* 1. HERO BANNER: Civic Welcome & Genuine Trust Highlights */}
-      <section className="relative overflow-hidden rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 shadow-xs">
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="max-w-xl space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400 text-xs font-bold">
-              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-              <span>Jejaring Temu Kembali Terpercaya</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-              Halo, {profile?.display_name || user?.email?.split("@")[0] || "Warga MuaraKu"}!
-            </h1>
-            <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-              Jelajahi laporan barang tertinggal dan temuan di sekitar Anda. Semua klaim dilindungi nomor registrasi unik dan verifikasi privat anti-fraud.
-            </p>
-          </div>
-
-          {/* Trust Highlights Capsules (Civic Principles, no fake metrics) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 min-w-[300px] sm:min-w-[340px]">
-            <div className="bg-[#FFFCF8] dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 p-3.5 rounded-2xl flex flex-col">
-              <span className="text-[11px] font-bold text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5" /> Anti-Fraud
-              </span>
-              <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 mt-1">
-                Bukti Privat
-              </span>
-              <span className="text-[10px] text-zinc-400 mt-0.5">
-                Ciri rahasia aman dienkripsi
-              </span>
-            </div>
-
-            <div className="bg-[#FFFCF8] dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 p-3.5 rounded-2xl flex flex-col">
-              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5" /> Pos Mitra
-              </span>
-              <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 mt-1">
-                Petugas Lokasi
-              </span>
-              <span className="text-[10px] text-zinc-400 mt-0.5">
-                Lencana kuning terverifikasi
-              </span>
-            </div>
-
-            <div className="bg-[#FFFCF8] dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 p-3.5 rounded-2xl flex flex-col">
-              <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
-                <Package className="w-3.5 h-3.5" /> Dua Alur
-              </span>
-              <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 mt-1">
-                Seeker &amp; Finder
-              </span>
-              <span className="text-[10px] text-zinc-400 mt-0.5">
-                Kelola laporan terpisah
-              </span>
-            </div>
-          </div>
+    <div className="space-y-6 sm:space-y-8 animate-fade-in max-w-7xl mx-auto">
+      {/* 1. Header Overview Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-zinc-200 dark:border-zinc-800">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+            Discover Feed
+          </h1>
+          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Jejaring laporan barang tertinggal dan temuan terverifikasi warga
+          </p>
         </div>
 
-        {/* Ambient background blur */}
-        <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-orange-500/5 rounded-full pointer-events-none blur-3xl" />
-      </section>
+        {/* Action Controls */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleOpenCreateModal("lost")}
+            className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1.5 transition-colors shadow-xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Lapor Kehilangan</span>
+          </button>
+          <button
+            onClick={() => handleOpenCreateModal("found")}
+            className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition-colors shadow-xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Lapor Temuan</span>
+          </button>
+        </div>
+      </div>
 
-      {/* 2. FEED FILTER CONTROLS */}
-      <section className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          {/* Main Feed Type Pills */}
-          <div className="flex items-center gap-2 p-1 rounded-2xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/60 dark:border-zinc-700/60 self-start">
-            <button
-              onClick={() => setFeedFilter("all")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                feedFilter === "all"
-                  ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-              }`}
-            >
-              Semua Laporan
-            </button>
-            <button
-              onClick={() => setFeedFilter("lost")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                feedFilter === "lost"
-                  ? "bg-white dark:bg-zinc-900 text-rose-600 dark:text-rose-400 shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-              }`}
-            >
-              Barang Hilang
-            </button>
-            <button
-              onClick={() => setFeedFilter("found")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                feedFilter === "found"
-                  ? "bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-              }`}
-            >
-              Barang Ditemukan
-            </button>
-          </div>
-
-          {/* Sort Switcher */}
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            <span className="text-xs text-zinc-400">Urutkan:</span>
-            <button
-              onClick={() => setSortBy(sortBy === "latest" ? "name" : "latest")}
-              className="px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700"
-            >
-              <ArrowUpDown className="w-3.5 h-3.5 text-zinc-400" />
-              <span>{sortBy === "latest" ? "Terbaru" : "Nama"}</span>
-            </button>
-          </div>
+      {/* 2. Filter Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-50/80 dark:bg-[#121214] p-3 rounded-2xl border border-zinc-200/80 dark:border-zinc-800">
+        {/* Type Filter Buttons */}
+        <div className="flex items-center gap-1 bg-zinc-200/70 dark:bg-zinc-800/80 p-1 rounded-xl">
+          <button
+            onClick={() => {
+              setFeedType("all");
+              setPage(1);
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              feedType === "all"
+                ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+            }`}
+          >
+            Semua
+          </button>
+          <button
+            onClick={() => {
+              setFeedType("lost");
+              setPage(1);
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              feedType === "lost"
+                ? "bg-white dark:bg-zinc-900 text-rose-600 dark:text-rose-400 shadow-xs"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-rose-600"
+            }`}
+          >
+            Kehilangan
+          </button>
+          <button
+            onClick={() => {
+              setFeedType("found");
+              setPage(1);
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              feedType === "found"
+                ? "bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 shadow-xs"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-emerald-600"
+            }`}
+          >
+            Ditemukan
+          </button>
         </div>
 
-        {/* Category Pills Slider */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-          {categories.map((cat) => {
-            const isSelected = selectedCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                  isSelected
-                    ? "bg-orange-500 text-white shadow-xs"
-                    : "bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700"
-                }`}
-              >
-                {cat.label}
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* 3. REPORT CARDS GRID / EMPTY STATE / ERROR STATE */}
-      <section>
-        {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center space-y-3">
-            <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-            <p className="text-xs text-zinc-500">Memuat laporan dari database...</p>
-          </div>
-        ) : errorMsg ? (
-          <div className="p-10 text-center rounded-3xl border border-rose-200 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 space-y-4">
-            <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
-            <div className="space-y-1">
-              <h3 className="text-sm font-bold text-rose-900 dark:text-rose-200">
-                Gagal Memuat Laporan
-              </h3>
-              <p className="text-xs text-rose-600 dark:text-rose-400">{errorMsg}</p>
-            </div>
-            <button
-              onClick={loadData}
-              className="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700"
+        {/* Secondary filters: Category & Sort */}
+        <div className="flex items-center gap-2.5 overflow-x-auto pb-1 sm:pb-0">
+          <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+            <Filter className="w-3.5 h-3.5" />
+            <select
+              value={selectedCategory}
+              onChange={(e) => {
+                setSelectedCategory(e.target.value);
+                setPage(1);
+              }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-orange-500"
             >
-              Coba Lagi
-            </button>
+              <option value="all">Semua Kategori</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name_id}
+                </option>
+              ))}
+            </select>
           </div>
-        ) : sortedReports.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sortedReports.map((report) => (
-              <ReportCard
-                key={report.id}
-                report={report}
-                onChatClick={handleChatClick}
-              />
-            ))}
+
+          <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+            <ArrowUpDown className="w-3.5 h-3.5" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as "latest" | "title" | "occurred_at")}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            >
+              <option value="latest">Terbaru Terbit</option>
+              <option value="occurred_at">Waktu Kejadian</option>
+              <option value="title">Abjad Nama</option>
+            </select>
           </div>
-        ) : (
-          <div className="p-12 text-center rounded-3xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50 space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center mx-auto text-zinc-400">
-              <Search className="w-7 h-7" />
-            </div>
-            <div className="space-y-1 max-w-sm mx-auto">
-              <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-200">
-                {t.discover.no_reports}
-              </h3>
-              <p className="text-xs text-zinc-500 leading-relaxed">
-                {selectedCategory !== "all"
-                  ? "Tidak ada laporan pada kategori ini. Coba pilih 'Semua Kategori'."
-                  : "Belum ada laporan aktif di feed. Jadilah yang pertama membuat laporan untuk saling membantu!"}
-              </p>
-            </div>
-            <div>
-              <button
-                onClick={() => setReportModalOpen(true)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold shadow-xs transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Buat Laporan Baru</span>
-              </button>
-            </div>
-          </div>
+
+          <button
+            onClick={() => loadData()}
+            title="Muat ulang data"
+            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* 3. Status Count */}
+      <div className="flex items-center justify-between text-xs text-zinc-500 px-1">
+        <span>
+          Menampilkan {reports.length} dari {totalCount} laporan
+        </span>
+        {totalPages > 1 && (
+          <span>
+            Halaman {page} dari {totalPages}
+          </span>
         )}
-      </section>
+      </div>
 
-      {/* Report Modal */}
+      {/* 4. Content Area */}
+      {loading ? (
+        <LoadingPattern />
+      ) : errorMsg ? (
+        <ErrorPattern message={errorMsg} onRetry={loadData} />
+      ) : reports.length === 0 ? (
+        <EmptyPattern
+          title="Belum ada laporan aktif"
+          description={
+            feedType === "lost"
+              ? "Tidak ada laporan barang hilang yang cocok dengan filter saat ini."
+              : feedType === "found"
+              ? "Tidak ada laporan barang temuan yang cocok dengan filter saat ini."
+              : "Belum ada laporan yang terdaftar atau telah disetujui moderator."
+          }
+          actionLabel="Buat Laporan Baru"
+          onAction={() => handleOpenCreateModal("lost")}
+        />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+          {reports.map((report) => (
+            <ReportCard
+              key={report.id}
+              report={report}
+              onSavedChange={handleSavedChange}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* 5. Pagination Navigation */}
+      {totalPages > 1 && !loading && (
+        <div className="flex items-center justify-center gap-2 pt-6 pb-8 border-t border-zinc-200 dark:border-zinc-800">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-1"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span>Sebelumnya</span>
+          </button>
+
+          <span className="text-xs text-zinc-500 px-3">
+            {page} / {totalPages}
+          </span>
+
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-1"
+          >
+            <span>Berikutnya</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* 6. Report Creation / Edit Modal */}
       <ReportModal
         isOpen={reportModalOpen}
-        onClose={() => {
-          setReportModalOpen(false);
+        onClose={() => setReportModalOpen(false)}
+        defaultType={modalDefaultType}
+        onSuccess={() => {
           loadData();
         }}
-        defaultType="lost"
       />
     </div>
   );

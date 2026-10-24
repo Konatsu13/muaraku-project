@@ -43,3 +43,8 @@ next-env.d.ts
 
 # Design and PRD
 stitch_specs
+/database/
+Document/
+AGENTS.md
+CLAUDE.md
+/.taste-skill/

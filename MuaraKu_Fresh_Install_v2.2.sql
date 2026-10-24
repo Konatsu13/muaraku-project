@@ -1,19 +1,38 @@
 -- ============================================================================
+-- MuaraKu — FRESH INSTALL (22 public application tables), v2.2
+-- Use this file ONLY when starting from an empty Supabase project/schema.
+-- It installs the user's original schema, then applies the v2.2 simplification.
+-- The original source file is not modified.
+-- Supabase must already provide its managed auth.users and storage schemas.
+-- Run the ENTIRE file in Supabase SQL Editor; do not run the migration file alone.
+-- ============================================================================
+
+DO $$
+BEGIN
+  IF to_regclass('auth.users') IS NULL THEN
+    RAISE EXCEPTION 'MuaraKu setup stopped: auth.users is missing. Run this only in a Supabase project with Supabase Auth enabled.';
+  END IF;
+  IF to_regclass('storage.objects') IS NULL OR to_regclass('storage.buckets') IS NULL THEN
+    RAISE EXCEPTION 'MuaraKu setup stopped: Supabase Storage tables are missing. Ensure Storage is enabled in this Supabase project.';
+  END IF;
+END;
+$$;
+
+-- ============================================================================
 -- MuaraKu — Supabase/PostgreSQL starter schema
 -- Target: Supabase + Next.js (App Router or Pages Router)
 -- Version: 1.0 | Generated: 2026-10-11
 --
 -- IMPORTANT BEFORE RUNNING
--- 1. Review this file and compare with your existing Supabase schema first.
--- 2. Run in Supabase SQL Editor on a development project first.
--- 3. This file does NOT create or replace auth.users and does NOT delete data.
--- 4. Supabase Auth manages OTP/tokens/sessions. Do NOT store raw OTP codes here.
--- 5. Keep Supabase Secret/legacy service_role, Resend, and AI keys server-side.
+-- 1. This combined file creates the original schema, then simplifies it to v2.2.
+-- 2. Run the entire file only in a new/empty public schema of a Supabase project.
+-- 3. It does not create or replace Supabase-managed auth.users.
+-- 4. Supabase Auth manages OTP/tokens/sessions. Never store raw OTP codes here.
+-- 5. Keep service_role/secret, Resend, and AI keys server-side.
 -- 6. Report images, message attachments, claim evidence, and avatars use separate
---    private Storage buckets; private evidence must NEVER be uploaded to the
+--    private Storage buckets; private evidence must NEVER be uploaded to a
 --    public report-image bucket.
--- 7. Run application writes via authenticated Supabase sessions or trusted
---    Next.js server routes. Never expose the service-role/secret key in browser.
+-- 7. Never expose the service-role/secret key in the browser.
 -- ============================================================================
 
 begin;
@@ -1511,3 +1530,361 @@ commit;
 -- 8. This starter schema does not replace a security review, application tests,
 --    Storage policy review, backup plan, or a data retention/deletion workflow.
 -- ============================================================================
+
+
+-- ============================================================================
+-- MuaraKu — simplify application schema to 22 public tables
+-- Migration from the user's original schema: muaraku_supabase_schema(2).sql
+--
+-- IMPORTANT:
+-- 1. In this combined file, the source schema was created in the previous section.
+-- 2. This section is not intended to be run by itself on an empty database.
+-- 3. The transaction is guarded: deferred tables with data stop the migration.
+-- 4. Supabase Auth continues to own identity, credentials, OTP, and sessions.
+-- 5. The final public application schema has 22 tables; removed tables are empty
+--    in a fresh install, and the source data file above remains unchanged.
+-- ============================================================================
+
+begin;
+
+-- --------------------------------------------------------------------------
+-- 0. Preflight: require original schema and prevent silent loss from deferred
+--    tables that are not yet part of the MVP.
+-- --------------------------------------------------------------------------
+do $$
+declare
+  required_table text;
+  deferred_count bigint;
+begin
+  foreach required_table in array array[
+    'user_profiles', 'user_account_controls', 'staff_roles', 'report_categories',
+    'locations', 'reports', 'report_private_details', 'report_media',
+    'report_matches', 'claims', 'claim_evidence', 'saved_reports',
+    'conversations', 'conversation_members', 'messages', 'user_blocks',
+    'notifications', 'notification_preferences', 'safety_reports',
+    'moderation_actions', 'moderation_appeals', 'location_staff_verifications',
+    'support_tickets', 'support_ticket_messages', 'report_translations',
+    'muara_ai_sessions', 'muara_ai_messages', 'terms_acceptances', 'audit_logs'
+  ] loop
+    if to_regclass('public.' || required_table) is null then
+      raise exception 'Migration cancelled: expected original table public.% is missing. Compare the live database with the source schema first.', required_table;
+    end if;
+  end loop;
+
+  select count(*) into deferred_count
+  from public.notification_preferences np
+  left join public.user_account_controls uac on uac.user_id = np.user_id
+  where uac.user_id is null;
+  if deferred_count > 0 then
+    raise exception 'Migration cancelled: % notification preference rows have no user_account_controls row. Reconcile these users before migrating preferences.', deferred_count;
+  end if;
+
+  select count(*) into deferred_count
+  from public.locations l
+  where not exists (select 1 from public.reports r where r.location_id = l.id);
+  if deferred_count > 0 then
+    raise exception 'Migration cancelled: public.locations contains % location-catalog rows not referenced by any report. Export/review this catalogue before removing the locations table.', deferred_count;
+  end if;
+
+  select count(*) into deferred_count
+  from public.locations l
+  where l.parent_id is not null
+     or l.address is not null
+     or l.province is not null
+     or l.latitude is not null
+     or l.longitude is not null
+     or l.is_active = false
+     or l.created_by is not null;
+  if deferred_count > 0 then
+    raise exception 'Migration cancelled: public.locations contains % rows with hierarchy/address/coordinates/admin-state fields that are not represented in the simpler reports.location_label + city model. Export/review them before continuing.', deferred_count;
+  end if;
+
+  select count(*) into deferred_count from public.report_matches;
+  if deferred_count > 0 then
+    raise exception 'Migration cancelled: public.report_matches contains % rows. Export/review these matches before removing this deferred table.', deferred_count;
+  end if;
+
+  select count(*) into deferred_count from public.report_translations;
+  if deferred_count > 0 then
+    raise exception 'Migration cancelled: public.report_translations contains % rows. Export/review these rows before removing the deferred translation cache.', deferred_count;
+  end if;
+
+  select count(*) into deferred_count from public.moderation_appeals;
+  if deferred_count > 0 then
+    raise exception 'Migration cancelled: public.moderation_appeals contains % rows. Preserve/review appeals before deferring this feature.', deferred_count;
+  end if;
+
+  select count(*) into deferred_count from public.location_staff_verifications;
+  if deferred_count > 0 then
+    raise exception 'Migration cancelled: public.location_staff_verifications contains % rows. Preserve/review verification records before deferring this feature.', deferred_count;
+  end if;
+end;
+$$;
+
+-- --------------------------------------------------------------------------
+-- 1. Merge notification preferences into the existing private one-row-per-user
+--    account-controls row. Do NOT put these columns on user_profiles, because
+--    profiles can be visible to other users and preferences are private.
+-- --------------------------------------------------------------------------
+alter table public.user_account_controls
+  add column if not exists notify_in_app_messages boolean not null default true,
+  add column if not exists notify_in_app_matches boolean not null default true,
+  add column if not exists notify_in_app_claim_updates boolean not null default true,
+  add column if not exists notify_in_app_moderation_updates boolean not null default true,
+  add column if not exists notify_email_messages boolean not null default false,
+  add column if not exists notify_email_matches boolean not null default false,
+  add column if not exists notify_email_claim_updates boolean not null default true,
+  add column if not exists notify_email_moderation_updates boolean not null default true;
+
+update public.user_account_controls uac
+set notify_in_app_messages = np.in_app_messages,
+    notify_in_app_matches = np.in_app_matches,
+    notify_in_app_claim_updates = np.in_app_claim_updates,
+    notify_in_app_moderation_updates = np.in_app_moderation_updates,
+    notify_email_messages = np.email_messages,
+    notify_email_matches = np.email_matches,
+    notify_email_claim_updates = np.email_claim_updates,
+    notify_email_moderation_updates = np.email_moderation_updates,
+    updated_at = now()
+from public.notification_preferences np
+where np.user_id = uac.user_id;
+
+-- Replace the Auth signup trigger function so it no longer writes to the table
+-- that is being removed. The existing auth.users trigger remains attached.
+create or replace function public.muaraku_handle_new_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  derived_name text;
+begin
+  derived_name := coalesce(
+    nullif(trim(new.raw_user_meta_data ->> 'display_name'), ''),
+    nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
+    nullif(split_part(coalesce(new.email, 'pengguna'), '@', 1), ''),
+    'Pengguna MuaraKu'
+  );
+
+  insert into public.user_profiles(user_id, display_name)
+  values (new.id, left(derived_name, 80))
+  on conflict (user_id) do nothing;
+
+  insert into public.user_account_controls(user_id, status)
+  values (new.id, 'active')
+  on conflict (user_id) do nothing;
+
+  return new;
+end;
+$$;
+
+-- --------------------------------------------------------------------------
+-- 2. Replace structured location foreign key with report-level location text.
+--    Existing display labels/city values are retained; missing ones are copied
+--    from the referenced location before the foreign key is removed.
+-- --------------------------------------------------------------------------
+update public.reports r
+set location_label = coalesce(nullif(trim(r.location_label), ''), l.name),
+    city = coalesce(nullif(trim(r.city), ''), nullif(trim(l.city), ''))
+from public.locations l
+where r.location_id = l.id
+  and (nullif(trim(r.location_label), '') is null or nullif(trim(r.city), '') is null);
+
+drop index if exists public.reports_location_idx;
+
+-- Replace the trigger function before removing the old foreign-key column so no
+-- executable trigger code continues to refer to reports.location_id.
+create or replace function public.muaraku_bump_report_content_version()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if row(new.title, new.description, new.category_id, new.location_label, new.city,
+         new.occurred_at, new.color, new.brand, new.model, new.item_attributes)
+     is distinct from
+     row(old.title, old.description, old.category_id, old.location_label, old.city,
+         old.occurred_at, old.color, old.brand, old.model, old.item_attributes) then
+    new.content_version := old.content_version + 1;
+    new.moderation_status := 'pending_review';
+  end if;
+  return new;
+end;
+$$;
+
+alter table public.reports drop column if exists location_id;
+
+-- Update column-level client grants to match the new reports shape.
+revoke all on public.reports from anon, authenticated;
+grant select on public.reports to authenticated;
+grant insert (reporter_user_id, report_type, title, description, category_id,
+              location_label, city, occurred_at, color, brand, model, item_attributes)
+  on public.reports to authenticated;
+grant update (title, description, category_id, location_label, city, occurred_at,
+              color, brand, model, item_attributes)
+  on public.reports to authenticated;
+
+-- --------------------------------------------------------------------------
+-- 3. Merge moderation actions into the general audit log, then rename the
+--    resulting table to admin_activity_logs. Moderation reasons/messages/expiry
+--    and source IDs are preserved in JSON metadata.
+-- --------------------------------------------------------------------------
+insert into public.audit_logs
+  (actor_user_id, action, target_type, target_id, metadata, created_at)
+select
+  ma.actor_user_id,
+  left('moderation:' || ma.action_type, 120),
+  case
+    when ma.target_user_id is not null then 'user'
+    when ma.target_report_id is not null then 'report'
+    when ma.target_message_id is not null then 'message'
+    when ma.safety_report_id is not null then 'safety_report'
+    else null
+  end,
+  coalesce(ma.target_user_id::text, ma.target_report_id::text,
+           ma.target_message_id::text, ma.safety_report_id::text),
+  jsonb_strip_nulls(jsonb_build_object(
+    'source_table', 'moderation_actions',
+    'source_id', ma.id,
+    'action_type', ma.action_type,
+    'reason', ma.reason,
+    'public_message', ma.public_message,
+    'expires_at', ma.expires_at,
+    'target_user_id', ma.target_user_id,
+    'target_report_id', ma.target_report_id,
+    'target_message_id', ma.target_message_id,
+    'safety_report_id', ma.safety_report_id
+  )),
+  ma.created_at
+from public.moderation_actions ma;
+
+-- --------------------------------------------------------------------------
+-- 4. Drop the deferred empty tables. All related policies, triggers and indexes
+--    are removed with their parent tables. Foreign key dependencies are dropped
+--    in dependency-safe order.
+-- --------------------------------------------------------------------------
+drop table public.moderation_appeals;
+drop table public.location_staff_verifications;
+drop table public.report_matches;
+drop table public.report_translations;
+drop table public.notification_preferences;
+drop table public.moderation_actions;
+drop table public.locations;
+
+drop function if exists public.muaraku_validate_match_relationship();
+
+-- --------------------------------------------------------------------------
+-- 5. Rename the surviving audit table and refresh the access rules/grants.
+-- --------------------------------------------------------------------------
+alter table public.audit_logs rename to admin_activity_logs;
+
+alter index if exists public.audit_logs_actor_idx rename to admin_activity_logs_actor_idx;
+alter index if exists public.audit_logs_target_idx rename to admin_activity_logs_target_idx;
+alter index if exists public.audit_logs_created_idx rename to admin_activity_logs_created_idx;
+
+drop policy if exists audit_logs_admin_read on public.admin_activity_logs;
+drop policy if exists admin_activity_logs_admin_read on public.admin_activity_logs;
+create policy admin_activity_logs_admin_read
+  on public.admin_activity_logs for select to authenticated
+  using (public.muaraku_has_staff_role('admin'));
+
+revoke all on public.admin_activity_logs from anon, authenticated;
+grant select on public.admin_activity_logs to authenticated;
+grant all on public.admin_activity_logs to service_role;
+
+-- Preferences remain private in user_account_controls. A narrow column grant plus
+-- an owner-only RLS policy lets users update preferences without editing status.
+drop policy if exists account_controls_preferences_update_own on public.user_account_controls;
+create policy account_controls_preferences_update_own
+  on public.user_account_controls for update to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+-- Remove old client-side update rights for account status. The owner-only policy
+-- below must not be usable to change status/ban fields. Preferences are client-
+-- editable; status/restriction fields are changed only by a trusted server route.
+revoke update on public.user_account_controls from anon, authenticated;
+revoke update (status, public_message, effective_until, updated_by)
+  on public.user_account_controls from authenticated;
+grant update (
+  notify_in_app_messages,
+  notify_in_app_matches,
+  notify_in_app_claim_updates,
+  notify_in_app_moderation_updates,
+  notify_email_messages,
+  notify_email_matches,
+  notify_email_claim_updates,
+  notify_email_moderation_updates
+) on public.user_account_controls to authenticated;
+
+drop trigger if exists user_account_controls_set_updated_at on public.user_account_controls;
+create trigger user_account_controls_set_updated_at before update on public.user_account_controls
+for each row execute function public.muaraku_set_updated_at();
+
+-- Keep the retained app tables enabled for RLS; this is explicit documentation
+-- and makes the intended final shape easy to verify during review.
+alter table public.user_profiles enable row level security;
+alter table public.user_account_controls enable row level security;
+alter table public.staff_roles enable row level security;
+alter table public.report_categories enable row level security;
+alter table public.reports enable row level security;
+alter table public.report_private_details enable row level security;
+alter table public.report_media enable row level security;
+alter table public.claims enable row level security;
+alter table public.claim_evidence enable row level security;
+alter table public.saved_reports enable row level security;
+alter table public.conversations enable row level security;
+alter table public.conversation_members enable row level security;
+alter table public.messages enable row level security;
+alter table public.user_blocks enable row level security;
+alter table public.notifications enable row level security;
+alter table public.safety_reports enable row level security;
+alter table public.admin_activity_logs enable row level security;
+alter table public.support_tickets enable row level security;
+alter table public.support_ticket_messages enable row level security;
+alter table public.muara_ai_sessions enable row level security;
+alter table public.muara_ai_messages enable row level security;
+alter table public.terms_acceptances enable row level security;
+
+-- --------------------------------------------------------------------------
+-- 6. Final structural assertion: the 22 target application tables must exist.
+--    This checks the named target set, not unrelated tables in public schema.
+-- --------------------------------------------------------------------------
+do $$
+declare
+  retained_count integer;
+begin
+  select count(*) into retained_count
+  from information_schema.tables
+  where table_schema = 'public'
+    and table_type = 'BASE TABLE'
+    and table_name in (
+      'user_profiles', 'user_account_controls', 'staff_roles', 'report_categories',
+      'reports', 'report_private_details', 'report_media', 'claims', 'claim_evidence',
+      'saved_reports', 'conversations', 'conversation_members', 'messages', 'user_blocks',
+      'notifications', 'safety_reports', 'admin_activity_logs', 'support_tickets',
+      'support_ticket_messages', 'muara_ai_sessions', 'muara_ai_messages', 'terms_acceptances'
+    );
+
+  if retained_count <> 22 then
+    raise exception 'Migration verification failed: expected 22 retained MuaraKu tables, found %.', retained_count;
+  end if;
+end;
+$$;
+
+commit;
+
+-- Verification query: expected result is 22 rows.
+select table_name
+from information_schema.tables
+where table_schema = 'public'
+  and table_type = 'BASE TABLE'
+  and table_name in (
+    'user_profiles', 'user_account_controls', 'staff_roles', 'report_categories',
+    'reports', 'report_private_details', 'report_media', 'claims', 'claim_evidence',
+    'saved_reports', 'conversations', 'conversation_members', 'messages', 'user_blocks',
+    'notifications', 'safety_reports', 'admin_activity_logs', 'support_tickets',
+    'support_ticket_messages', 'muara_ai_sessions', 'muara_ai_messages', 'terms_acceptances'
+  )
+order by table_name;

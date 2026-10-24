@@ -1,232 +1,358 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { ReportCard, ReportItem } from "@/components/reports/ReportCard";
-import { fetchReports } from "@/lib/supabase/reports";
-import { useI18n } from "@/lib/i18n";
+import { ReportCard } from "@/components/reports/ReportCard";
+import {
+  fetchReports,
+  fetchCategories,
+  ReportDetailItem,
+  ReportCategory,
+} from "@/lib/supabase/reports";
 import {
   Search,
-  Sparkles,
+  Filter,
   X,
-  Loader2,
+  Calendar,
+  MapPin,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
 } from "lucide-react";
+import { LoadingPattern } from "@/components/ui/patterns/LoadingPattern";
+import { EmptyPattern } from "@/components/ui/patterns/EmptyPattern";
+import { ErrorPattern } from "@/components/ui/patterns/ErrorPattern";
 
 export default function SearchPage() {
-  const { t } = useI18n();
-
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  const [city, setCity] = useState("");
+  const [debouncedCity, setDebouncedCity] = useState("");
+
+  const [locationLabel, setLocationLabel] = useState("");
+  const [debouncedLocationLabel, setDebouncedLocationLabel] = useState("");
+
   const [filterType, setFilterType] = useState<"all" | "lost" | "found">("all");
-  const [filterCategory, setFilterCategory] = useState("all");
-  const [filterVerifiedOnly, setFilterVerifiedOnly] = useState(false);
-  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [categories, setCategories] = useState<ReportCategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const [page, setPage] = useState(1);
+  const [reports, setReports] = useState<ReportDetailItem[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const sampleKeywords = [
-    t.search.chip_1,
-    t.search.chip_2,
-    t.search.chip_3,
-    t.search.chip_4,
-  ];
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    const res = await fetchReports({
-      type: filterType,
-      search_query: query,
+  // Load categories once
+  useEffect(() => {
+    fetchCategories().then((res) => {
+      if (res.data) setCategories(res.data);
     });
-    setReports(res.data || []);
-    setLoading(false);
-  }, [filterType, query]);
+  }, []);
 
+  // Debounce text search inputs with ~300ms cooldown to avoid spamming queries on typing
   useEffect(() => {
     const timer = setTimeout(() => {
-      loadData();
+      setDebouncedQuery(query.trim());
+      setDebouncedCity(city.trim());
+      setDebouncedLocationLabel(locationLabel.trim());
+      setPage(1);
     }, 300);
     return () => clearTimeout(timer);
-  }, [loadData]);
+  }, [query, city, locationLabel]);
 
-  const searchResults = reports.filter((report) => {
-    // Category filter
-    if (filterCategory !== "all") {
-      if (!report.category.toLowerCase().includes(filterCategory.toLowerCase()))
-        return false;
+  const executeSearch = useCallback(async (isCancelledRef?: { current: boolean }) => {
+    if (isCancelledRef?.current) return;
+    setLoading(true);
+    setErrorMsg(null);
+
+    const res = await fetchReports({
+      type: filterType,
+      category_id: selectedCategory === "all" ? undefined : selectedCategory,
+      city: debouncedCity || undefined,
+      location_label: debouncedLocationLabel || undefined,
+      search_query: debouncedQuery || undefined,
+      start_date: startDate ? new Date(startDate).toISOString() : undefined,
+      end_date: endDate ? new Date(endDate).toISOString() : undefined,
+      page,
+      pageSize: 12,
+    });
+
+    if (isCancelledRef?.current) return;
+
+    if (res.error) {
+      setErrorMsg(res.error.message);
+      setReports([]);
+      setTotalCount(0);
+      setTotalPages(1);
+    } else {
+      setReports(res.data);
+      setTotalCount(res.count);
+      setTotalPages(res.totalPages || 1);
     }
+    if (isCancelledRef?.current) return;
+    setLoading(false);
+  }, [filterType, selectedCategory, debouncedCity, debouncedLocationLabel, debouncedQuery, startDate, endDate, page]);
 
-    // Verified staff only
-    if (filterVerifiedOnly && !report.is_verified_staff) return false;
-
-    return true;
-  });
+  // Load reports
+  useEffect(() => {
+    const isCancelledRef = { current: false };
+    executeSearch(isCancelledRef);
+    return () => {
+      isCancelledRef.current = true;
+    };
+  }, [executeSearch]);
 
   const clearFilters = () => {
     setQuery("");
+    setDebouncedQuery("");
     setFilterType("all");
-    setFilterCategory("all");
-    setFilterVerifiedOnly(false);
+    setSelectedCategory("all");
+    setCity("");
+    setDebouncedCity("");
+    setLocationLabel("");
+    setDebouncedLocationLabel("");
+    setStartDate("");
+    setEndDate("");
+    setPage(1);
+  };
+
+  const hasActiveFilters =
+    query ||
+    filterType !== "all" ||
+    selectedCategory !== "all" ||
+    city ||
+    locationLabel ||
+    startDate ||
+    endDate;
+
+  const handleSavedChange = (reportId: string, isSaved: boolean) => {
+    setReports((prev) =>
+      prev.map((r) => (r.id === reportId ? { ...r, is_saved: isSaved } : r))
+    );
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8 animate-fade-in">
-      {/* Search Header Banner */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-4">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-500/10 text-orange-600 dark:text-orange-400">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Pencarian Cerdas MuaraKu</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-            {t.search.title}
-          </h1>
-          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
-            {t.search.subtitle}
-          </p>
-        </div>
+    <div className="space-y-6 sm:space-y-8 animate-fade-in max-w-7xl mx-auto">
+      {/* Title */}
+      <div className="pb-5 border-b border-zinc-200 dark:border-zinc-800">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+          Pencarian &amp; Filter Laporan
+        </h1>
+        <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+          Cari barang hilang dan temuan berdasarkan kata kunci, lokasi, kategori, dan rentang tanggal
+        </p>
+      </div>
 
-        {/* Big Search Bar */}
+      {/* Main Search Bar & Multi-filter Box */}
+      <div className="bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xs">
+        {/* Full-text query bar */}
         <div className="relative">
-          <Search className="w-5 h-5 text-zinc-400 absolute left-4 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t.search.placeholder}
-            className="w-full pl-12 pr-12 py-3.5 bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-2xl text-sm sm:text-base text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-inner"
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Cari judul, ciri warna, merek, atau deskripsi barang..."
+            className="w-full pl-10 pr-10 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500"
           />
           {query && (
             <button
-              onClick={() => setQuery("")}
-              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
-              aria-label="Hapus kata kunci pencarian"
+              onClick={() => {
+                setQuery("");
+                setPage(1);
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              aria-label="Bersihkan pencarian"
             >
               <X className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Suggestion Chips */}
-        <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-          <span className="text-zinc-400 font-medium">Contoh kata kunci:</span>
-          {sampleKeywords.map((kw, i) => (
-            <button
-              key={i}
-              onClick={() => setQuery(kw)}
-              className="px-3 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-orange-500/10 hover:text-orange-600 transition-colors"
+        {/* Granular Filter Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+          {/* Type */}
+          <div>
+            <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">
+              Tipe Laporan
+            </label>
+            <select
+              value={filterType}
+              onChange={(e) => {
+                setFilterType(e.target.value as "all" | "lost" | "found");
+                setPage(1);
+              }}
+              className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-orange-500"
             >
-              &quot;{kw}&quot;
-            </button>
-          ))}
-        </div>
-      </div>
+              <option value="all">Semua Tipe</option>
+              <option value="lost">Kehilangan (Lost)</option>
+              <option value="found">Temuan (Found)</option>
+            </select>
+          </div>
 
-      {/* Filter and Control Bar */}
-      <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        {/* Type selector */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-400">Jenis:</span>
-          <div className="flex p-0.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-xs font-semibold">
-            <button
-              onClick={() => setFilterType("all")}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                filterType === "all"
-                  ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-800"
-              }`}
+          {/* Category */}
+          <div>
+            <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">
+              Kategori
+            </label>
+            <select
+              value={selectedCategory}
+              onChange={(e) => {
+                setSelectedCategory(e.target.value);
+                setPage(1);
+              }}
+              className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-orange-500"
             >
-              Semua
-            </button>
-            <button
-              onClick={() => setFilterType("lost")}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                filterType === "lost"
-                  ? "bg-white dark:bg-zinc-900 text-rose-600 shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-800"
-              }`}
-            >
-              Kehilangan
-            </button>
-            <button
-              onClick={() => setFilterType("found")}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                filterType === "found"
-                  ? "bg-white dark:bg-zinc-900 text-emerald-600 shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-800"
-              }`}
-            >
-              Ditemukan
-            </button>
+              <option value="all">Semua Kategori</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name_id}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* City */}
+          <div>
+            <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">
+              Kota
+            </label>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => {
+                setCity(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Contoh: Jakarta"
+              className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            />
+          </div>
+
+          {/* Location label */}
+          <div>
+            <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">
+              Lokasi Teks
+            </label>
+            <input
+              type="text"
+              value={locationLabel}
+              onChange={(e) => {
+                setLocationLabel(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Contoh: Bandara Soetta"
+              className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            />
           </div>
         </div>
 
-        {/* Category selector */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-400">Kategori:</span>
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-semibold text-zinc-800 dark:text-zinc-200 focus:outline-none"
-          >
-            <option value="all">Semua Kategori</option>
-            <option value="elektronik">Elektronik</option>
-            <option value="dompet">Dompet &amp; Kartu</option>
-            <option value="tas">Tas &amp; Ransel</option>
-            <option value="kunci">Kunci &amp; Aksesori</option>
-            <option value="identitas">Identitas</option>
-            <option value="perlengkapan">Perlengkapan</option>
-          </select>
+        {/* Date Range & Clear Action */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-zinc-500 text-[11px] flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Rentang:</span>
+            </span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setPage(1);
+              }}
+              className="px-2 py-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md text-[11px]"
+            />
+            <span className="text-zinc-400">-</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setPage(1);
+              }}
+              className="px-2 py-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md text-[11px]"
+            />
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="text-xs text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Reset Semua Filter</span>
+            </button>
+          )}
         </div>
+      </div>
 
-        {/* Verified Staff checkbox */}
-        <label className="flex items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={filterVerifiedOnly}
-            onChange={(e) => setFilterVerifiedOnly(e.target.checked)}
-            className="w-4 h-4 rounded text-orange-500 focus:ring-orange-500 border-zinc-300 dark:border-zinc-600"
-          />
-          <span>Hanya Pos Petugas Terverifikasi</span>
-        </label>
-
-        {/* Reset filter button */}
-        {(query || filterType !== "all" || filterCategory !== "all" || filterVerifiedOnly) && (
-          <button
-            onClick={clearFilters}
-            className="text-xs font-bold text-orange-600 dark:text-orange-400 hover:underline"
-          >
-            Reset Filter
-          </button>
+      {/* Result Count Info */}
+      <div className="flex items-center justify-between text-xs text-zinc-500 px-1">
+        <span>
+          Ditemukan {totalCount} hasil pencarian
+        </span>
+        {totalPages > 1 && (
+          <span>
+            Halaman {page} dari {totalPages}
+          </span>
         )}
       </div>
 
-      {/* Results Header */}
-      <div className="flex items-center justify-between px-1">
-        <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-          {searchResults.length} {t.search.results_found}
-        </p>
-      </div>
-
-      {/* Loading & Results Grid */}
+      {/* Main Results */}
       {loading ? (
-        <div className="py-20 flex flex-col items-center justify-center space-y-3">
-          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-          <p className="text-xs text-zinc-500">Mencari laporan...</p>
-        </div>
-      ) : searchResults.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {searchResults.map((report) => (
-            <ReportCard key={report.id} report={report} />
+        <LoadingPattern />
+      ) : errorMsg ? (
+        <ErrorPattern message={errorMsg} onRetry={executeSearch} />
+      ) : reports.length === 0 ? (
+        <EmptyPattern
+          title="Tidak ada laporan yang sesuai"
+          description="Coba ubah kata kunci pencarian, sesuaikan filter lokasi, atau reset filter untuk melihat lebih banyak laporan."
+          actionLabel="Reset Filter"
+          onAction={clearFilters}
+        />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+          {reports.map((report) => (
+            <ReportCard
+              key={report.id}
+              report={report}
+              onSavedChange={handleSavedChange}
+            />
           ))}
         </div>
-      ) : (
-        <div className="p-16 text-center rounded-3xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900/40 space-y-3">
-          <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mx-auto text-zinc-400">
-            <Search className="w-6 h-6" />
-          </div>
-          <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-            {t.search.no_results}
-          </h3>
-          <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-            {t.search.broaden_search}
-          </p>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && !loading && (
+        <div className="flex items-center justify-center gap-2 pt-6 pb-8 border-t border-zinc-200 dark:border-zinc-800">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-1"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span>Sebelumnya</span>
+          </button>
+
+          <span className="text-xs text-zinc-500 px-3">
+            {page} / {totalPages}
+          </span>
+
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-1"
+          >
+            <span>Berikutnya</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
     </div>

@@ -107,7 +107,7 @@ export function MuaraAIChatWidget() {
   };
 
   return (
-    <div className="fixed bottom-5 right-5 z-40">
+    <div className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] md:bottom-6 right-4 md:right-5 z-40">
       {/* Floating Toggle Button */}
       {!isOpen && (
         <button

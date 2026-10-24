@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
+import { AppBottomNav } from "@/components/layout/AppBottomNav";
 import { MuaraAIChatWidget } from "@/components/ai/MuaraAIChatWidget";
 import { ReportModal } from "@/components/reports/ReportModal";
+import { SettingsOverlay } from "@/components/overlays/SettingsOverlay";
 import { useAuth } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 
@@ -19,9 +21,14 @@ export default function AppLayout({
   const pathname = usePathname();
   const { user, isLoading, openAuthModal } = useAuth();
 
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportModalType, setReportModalType] = useState<"lost" | "found">("lost");
+  const mainRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [pathname]);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -60,24 +67,26 @@ export default function AppLayout({
   }
 
   return (
-    <div className="min-h-screen flex bg-[#FFFCF8] dark:bg-[#18181B] text-zinc-900 dark:text-zinc-100 transition-colors">
-      {/* Sidebar Component */}
-      <AppSidebar
-        mobileOpen={mobileMenuOpen}
-        onMobileClose={() => setMobileMenuOpen(false)}
-        onOpenReportModal={handleOpenReportModal}
-      />
+    <div className="h-[100dvh] w-full flex overflow-hidden bg-[#FFFCF8] dark:bg-[#18181B] text-zinc-900 dark:text-zinc-100 transition-colors">
+      {/* Desktop Sidebar */}
+      <AppSidebar onOpenSettings={() => setSettingsOpen(true)} />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <AppHeader
-          onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
+          onOpenSettings={() => setSettingsOpen(true)}
           onOpenReportModal={handleOpenReportModal}
         />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto">
-          {children}
+        <main
+          ref={mainRef}
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8"
+        >
+          <div className="max-w-[1440px] w-full mx-auto">{children}</div>
         </main>
+
+        {/* Mobile main-menu navigation — in flow so it is visible immediately */}
+        <AppBottomNav />
       </div>
 
       {/* Global AI Assistant Floating Widget */}
@@ -89,6 +98,9 @@ export default function AppLayout({
         onClose={() => setReportModalOpen(false)}
         defaultType={reportModalType}
       />
+
+      {/* Settings Overlay (shared by sidebar and mobile header) */}
+      <SettingsOverlay isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

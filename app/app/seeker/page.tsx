@@ -1,239 +1,273 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { ReportCard, ReportItem } from "@/components/reports/ReportCard";
-import { fetchReports } from "@/lib/supabase/reports";
-import { useAuth } from "@/lib/auth";
-import { useI18n } from "@/lib/i18n";
+import { ReportCard } from "@/components/reports/ReportCard";
 import {
-  Search,
-  Sparkles,
+  fetchReports,
+  fetchCategories,
+  ReportDetailItem,
+  ReportCategory,
+} from "@/lib/supabase/reports";
+import { useAuth } from "@/lib/auth";
+import {
   Plus,
-  FileText,
-  Loader2,
-  AlertCircle,
+  Filter,
+  RefreshCw,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { ReportModal } from "@/components/reports/ReportModal";
+import { LoadingPattern } from "@/components/ui/patterns/LoadingPattern";
+import { EmptyPattern } from "@/components/ui/patterns/EmptyPattern";
+import { ErrorPattern } from "@/components/ui/patterns/ErrorPattern";
 
 export default function SeekerPage() {
   const { user } = useAuth();
-  const { t } = useI18n();
 
-  const [activeTab, setActiveTab] = useState<"explore" | "my_reports" | "matches">("explore");
-  const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [lostReports, setLostReports] = useState<ReportItem[]>([]);
-  const [myReports, setMyReports] = useState<ReportItem[]>([]);
+  const [activeTab, setActiveTab] = useState<"explore" | "my_reports">("explore");
+  const [categories, setCategories] = useState<ReportCategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [page, setPage] = useState(1);
+
+  const [reports, setReports] = useState<ReportDetailItem[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+
+  // Load categories once
+  useEffect(() => {
+    fetchCategories().then((res) => {
+      if (res.data) setCategories(res.data);
+    });
+  }, []);
+
+  const loadData = useCallback(async (isCancelledRef?: { current: boolean }) => {
+    if (isCancelledRef?.current) return;
+    setLoading(true);
     setErrorMsg(null);
 
-    const [allLostRes, myLostRes] = await Promise.all([
-      fetchReports({ type: "lost" }),
-      user ? fetchReports({ type: "lost", reporter_user_id: user.id }) : Promise.resolve({ data: [], error: null }),
-    ]);
+    const isMyReports = activeTab === "my_reports";
 
-    if (allLostRes.error) {
-      setErrorMsg(allLostRes.error.message);
+    if (isMyReports && !user?.id) {
+      if (isCancelledRef?.current) return;
+      setReports([]);
+      setTotalCount(0);
+      setTotalPages(1);
+      setLoading(false);
+      return;
+    }
+
+    const res = await fetchReports({
+      type: "lost",
+      reporter_user_id: isMyReports ? user?.id : undefined,
+      category_id: selectedCategory === "all" ? undefined : selectedCategory,
+      page,
+      pageSize: 12,
+    });
+
+    if (isCancelledRef?.current) return;
+
+    if (res.error) {
+      setErrorMsg(res.error.message);
+      setReports([]);
+      setTotalCount(0);
+      setTotalPages(1);
     } else {
-      setLostReports(allLostRes.data);
+      setReports(res.data);
+      setTotalCount(res.count);
+      setTotalPages(res.totalPages || 1);
     }
-
-    if (myLostRes.data) {
-      setMyReports(myLostRes.data);
-    }
-
+    if (isCancelledRef?.current) return;
     setLoading(false);
-  }, [user]);
+  }, [activeTab, user?.id, selectedCategory, page]);
 
+  // Load lost reports
   useEffect(() => {
-    let isMounted = true;
-    (async () => {
-      await loadData();
-    })();
+    const isCancelledRef = { current: false };
+    loadData(isCancelledRef);
     return () => {
-      isMounted = false;
+      isCancelledRef.current = true;
     };
   }, [loadData]);
 
-  const matchedReports = lostReports.filter((r) => Boolean(r.match_confidence));
-
-  const handleReportCreated = () => {
-    loadData();
-    setActiveTab("my_reports");
+  const handleSavedChange = (reportId: string, isSaved: boolean) => {
+    setReports((prev) =>
+      prev.map((r) => (r.id === reportId ? { ...r, is_saved: isSaved } : r))
+    );
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8 animate-fade-in">
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 sm:p-8 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
-        <div className="space-y-1.5">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400">
-            <Search className="w-3.5 h-3.5" />
-            <span>Seeker Hub • Fokus Barang Hilang</span>
+    <div className="space-y-6 sm:space-y-8 animate-fade-in max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-zinc-200 dark:border-zinc-800">
+        <div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 mb-1.5">
+            <Search className="w-3 h-3" />
+            <span>Seeker Hub • Barang Hilang</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-            {t.seeker.title}
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+            Laporan Kehilangan
           </h1>
-          <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">
-            {t.seeker.subtitle}
+          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Daftar barang yang hilang dilaporkan oleh warga dan status penanganannya
           </p>
         </div>
 
         <button
           onClick={() => setReportModalOpen(true)}
-          className="self-start sm:self-auto px-5 py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl text-xs sm:text-sm shadow-sm flex items-center gap-2 transition-transform transform active:scale-95"
+          className="self-start sm:self-auto px-4 py-2.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1.5 transition-colors shadow-xs"
         >
-          <Plus className="w-4 h-4" />
-          <span>{t.seeker.create_cta}</span>
+          <Plus className="w-3.5 h-3.5" />
+          <span>Buat Laporan Kehilangan</span>
         </button>
       </div>
 
-      {/* Tabs Subnavigation */}
-      <div className="flex items-center gap-2 p-1 rounded-2xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/60 dark:border-zinc-700/60 self-start overflow-x-auto">
-        <button
-          onClick={() => setActiveTab("explore")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-            activeTab === "explore"
-              ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-xs"
-              : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-          }`}
-        >
-          {t.seeker.tab_explore} ({lostReports.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("my_reports")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-            activeTab === "my_reports"
-              ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-xs"
-              : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-          }`}
-        >
-          {t.seeker.tab_my_reports} ({myReports.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("matches")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
-            activeTab === "matches"
-              ? "bg-white dark:bg-zinc-900 text-orange-600 dark:text-orange-400 shadow-xs"
-              : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5 text-orange-500" />
-          <span>{t.seeker.tab_matches} ({matchedReports.length})</span>
-        </button>
-      </div>
-
-      {/* Loading & Error States */}
-      {loading ? (
-        <div className="py-20 flex flex-col items-center justify-center space-y-3">
-          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-          <p className="text-xs text-zinc-500">Memuat laporan kehilangan...</p>
-        </div>
-      ) : errorMsg ? (
-        <div className="p-10 text-center rounded-3xl border border-rose-200 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 space-y-4">
-          <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
-          <p className="text-xs text-rose-600 dark:text-rose-400">{errorMsg}</p>
+      {/* Tabs & Filters */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-50/80 dark:bg-[#121214] p-3 rounded-2xl border border-zinc-200/80 dark:border-zinc-800">
+        <div className="flex items-center gap-1 bg-zinc-200/70 dark:bg-zinc-800/80 p-1 rounded-xl">
           <button
-            onClick={loadData}
-            className="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700"
+            onClick={() => {
+              setActiveTab("explore");
+              setPage(1);
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              activeTab === "explore"
+                ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+            }`}
           >
-            Coba Lagi
+            Semua Kehilangan
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("my_reports");
+              setPage(1);
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              activeTab === "my_reports"
+                ? "bg-white dark:bg-zinc-900 text-rose-600 dark:text-rose-400 shadow-xs"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-rose-600"
+            }`}
+          >
+            Laporan Saya
           </button>
         </div>
+
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+            <Filter className="w-3.5 h-3.5" />
+            <select
+              value={selectedCategory}
+              onChange={(e) => {
+                setSelectedCategory(e.target.value);
+                setPage(1);
+              }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            >
+              <option value="all">Semua Kategori</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name_id}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() => loadData()}
+            title="Muat ulang data"
+            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Count Info */}
+      <div className="flex items-center justify-between text-xs text-zinc-500 px-1">
+        <span>
+          Menampilkan {reports.length} dari {totalCount} barang hilang
+        </span>
+        {totalPages > 1 && (
+          <span>
+            Halaman {page} dari {totalPages}
+          </span>
+        )}
+      </div>
+
+      {/* Main Content Area */}
+      {loading ? (
+        <LoadingPattern />
+      ) : errorMsg ? (
+        <ErrorPattern message={errorMsg} onRetry={loadData} />
+      ) : activeTab === "my_reports" && !user ? (
+        <EmptyPattern
+          title="Masuk untuk melihat laporan Anda"
+          description="Anda perlu masuk ke akun MuaraKu terlebih dahulu untuk mengelola laporan kehilangan yang telah Anda buat."
+        />
+      ) : reports.length === 0 ? (
+        <EmptyPattern
+          title={activeTab === "my_reports" ? "Belum ada laporan kehilangan Anda" : "Belum ada barang hilang"}
+          description={
+            activeTab === "my_reports"
+              ? "Anda belum menerbitkan laporan barang hilang. Klik tombol di bawah untuk membuat laporan baru."
+              : "Saat ini tidak ada laporan barang hilang yang cocok dengan filter."
+          }
+          actionLabel="Buat Laporan Kehilangan"
+          onAction={() => setReportModalOpen(true)}
+        />
       ) : (
-        <>
-          {/* Content per Tab */}
-          {activeTab === "explore" && (
-            lostReports.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {lostReports.map((report) => (
-                  <ReportCard key={report.id} report={report} />
-                ))}
-              </div>
-            ) : (
-              <div className="p-12 text-center rounded-3xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50 space-y-3">
-                <Search className="w-10 h-10 text-zinc-400 mx-auto" />
-                <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-200">
-                  Belum Ada Laporan Kehilangan
-                </h3>
-                <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-                  Belum ada laporan kehilangan yang aktif. Jika Anda kehilangan barang, buat laporan sekarang.
-                </p>
-                <div>
-                  <button
-                    onClick={() => setReportModalOpen(true)}
-                    className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-xs"
-                  >
-                    {t.seeker.create_cta}
-                  </button>
-                </div>
-              </div>
-            )
-          )}
-
-          {activeTab === "my_reports" && (
-            <div className="space-y-6">
-              {myReports.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {myReports.map((report) => (
-                    <div key={report.id} className="relative">
-                      <ReportCard report={report} />
-                      <div className="mt-2 flex items-center justify-between text-xs px-2 text-zinc-500">
-                        <span className="font-semibold text-emerald-600">Status: Aktif Memantau</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-12 text-center rounded-3xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50 space-y-3">
-                  <FileText className="w-10 h-10 text-zinc-400 mx-auto" />
-                  <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-200">
-                    {t.seeker.no_my_reports}
-                  </h3>
-                  <button
-                    onClick={() => setReportModalOpen(true)}
-                    className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-xs"
-                  >
-                    {t.seeker.create_cta}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "matches" && (
-            <div className="space-y-6">
-              <div className="p-4 rounded-2xl bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900/50 text-xs text-orange-900 dark:text-orange-200 flex items-start gap-3">
-                <Sparkles className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                <div className="leading-relaxed">
-                  <strong>Kandidat Rekomendasi AI Matching:</strong> Algoritma menganalisis kesamaan atribut lokasi, waktu, dan ciri visual laporan Anda terhadap laporan temuan di database.
-                </div>
-              </div>
-
-              {matchedReports.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {matchedReports.map((report) => (
-                    <ReportCard key={report.id} report={report} />
-                  ))}
-                </div>
-              ) : (
-                <div className="p-10 text-center rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
-                  Belum ada kandidat kecocokan otomatis saat ini.
-                </div>
-              )}
-            </div>
-          )}
-        </>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+          {reports.map((report) => (
+            <ReportCard
+              key={report.id}
+              report={report}
+              onSavedChange={handleSavedChange}
+            />
+          ))}
+        </div>
       )}
 
-      {/* Report Modal */}
+      {/* Pagination */}
+      {totalPages > 1 && !loading && (
+        <div className="flex items-center justify-center gap-2 pt-6 pb-8 border-t border-zinc-200 dark:border-zinc-800">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-1"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span>Sebelumnya</span>
+          </button>
+
+          <span className="text-xs text-zinc-500 px-3">
+            {page} / {totalPages}
+          </span>
+
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-1"
+          >
+            <span>Berikutnya</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Modal */}
       <ReportModal
         isOpen={reportModalOpen}
         onClose={() => setReportModalOpen(false)}
         defaultType="lost"
-        onReportCreated={handleReportCreated}
+        onSuccess={() => {
+          loadData();
+          setActiveTab("my_reports");
+        }}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useSyncExternalStore } from "react";
+import React, { useSyncExternalStore } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -21,12 +21,9 @@ import {
   MoreHorizontal,
   User as UserIcon,
 } from "lucide-react";
-import { SettingsOverlay } from "@/components/overlays/SettingsOverlay";
 
 interface AppSidebarProps {
-  mobileOpen?: boolean;
-  onMobileClose?: () => void;
-  onOpenReportModal?: (type?: "lost" | "found") => void;
+  onOpenSettings: () => void;
 }
 
 const SIDEBAR_EVENT = "muaraku_sidebar_toggle";
@@ -49,14 +46,10 @@ function getServerSidebarSnapshot(): boolean {
   return false;
 }
 
-export function AppSidebar({
-  mobileOpen = false,
-  onMobileClose,
-}: AppSidebarProps) {
+export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
   const pathname = usePathname();
   const { user, profile } = useAuth();
   const { locale } = useI18n();
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Desktop collapsed state
   const collapsed = useSyncExternalStore(
@@ -82,21 +75,11 @@ export function AppSidebar({
   ];
 
   return (
-    <>
-      {/* Mobile Backdrop */}
-      {mobileOpen && (
-        <div
-          onClick={onMobileClose}
-          className="fixed inset-0 z-40 bg-zinc-950/50 backdrop-blur-xs md:hidden"
-        />
-      )}
-
-      {/* Sidebar Element */}
-      <aside
-        className={`fixed md:sticky top-0 z-40 h-screen bg-white dark:bg-[#121214] border-r border-zinc-200 dark:border-zinc-800 flex flex-col justify-between transition-all duration-200 select-none ${
-          collapsed ? "md:w-[72px]" : "md:w-[240px]"
-        } ${mobileOpen ? "left-0 w-[240px]" : "-left-[260px] md:left-0"}`}
-      >
+    <aside
+      className={`hidden md:sticky md:flex top-0 z-40 h-screen bg-white dark:bg-[#121214] border-r border-zinc-200 dark:border-zinc-800 flex-col justify-between transition-all duration-200 select-none ${
+        collapsed ? "md:w-[72px]" : "md:w-[240px]"
+      }`}
+    >
         {/* Top & Navigation Container */}
         <div className="p-3.5 space-y-6 overflow-y-auto custom-scrollbar">
           {/* Header Lockup: Logo + MuaraKu.id + Toggle */}
@@ -157,7 +140,6 @@ export function AppSidebar({
                   <Link
                     key={item.href}
                     href={item.href}
-                    onClick={() => onMobileClose && onMobileClose()}
                     title={collapsed ? item.label : undefined}
                     className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                       isActive
@@ -207,7 +189,7 @@ export function AppSidebar({
 
               {/* Settings (Opens Overlay as required by product rules) */}
               <button
-                onClick={() => setIsSettingsOpen(true)}
+                onClick={onOpenSettings}
                 title={collapsed ? "Settings" : undefined}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer ${
                   collapsed ? "justify-center px-0" : ""
@@ -248,7 +230,7 @@ export function AppSidebar({
 
             {!collapsed && (
               <button
-                onClick={() => setIsSettingsOpen(true)}
+                onClick={onOpenSettings}
                 className="p-1 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
                 aria-label="User options"
               >
@@ -258,12 +240,5 @@ export function AppSidebar({
           </div>
         </div>
       </aside>
-
-      {/* Settings Overlay */}
-      <SettingsOverlay
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
-    </>
   );
 }

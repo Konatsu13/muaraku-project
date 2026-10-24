@@ -1,55 +1,91 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
-import { useI18n } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import {
   ShieldCheck,
   Calendar,
   FileText,
+  Bookmark,
   Edit3,
   Save,
   Loader2,
   Mail,
 } from "lucide-react";
-import { ReportCard, ReportItem } from "@/components/reports/ReportCard";
-import { fetchReports } from "@/lib/supabase/reports";
+import { ReportCard } from "@/components/reports/ReportCard";
+import { fetchReports, fetchSavedReports, ReportDetailItem } from "@/lib/supabase/reports";
+import { LoadingPattern } from "@/components/ui/patterns/LoadingPattern";
+import { EmptyPattern } from "@/components/ui/patterns/EmptyPattern";
 
 export default function ProfilePage() {
   const { user, profile, refreshProfile } = useAuth();
-  const { t } = useI18n();
-  const supabase = createClient();
 
+  const [activeTab, setActiveTab] = useState<"my_reports" | "saved">("my_reports");
   const [isEditing, setIsEditing] = useState(false);
-  const [displayName, setDisplayName] = useState(profile?.display_name || t.common.anonymous);
+  const [displayName, setDisplayName] = useState(profile?.display_name || "");
   const [bio, setBio] = useState(profile?.bio || "");
   const [saving, setSaving] = useState(false);
-  const [myReports, setMyReports] = useState<ReportItem[]>([]);
+
+  const [myReports, setMyReports] = useState<ReportDetailItem[]>([]);
+  const [savedReports, setSavedReports] = useState<ReportDetailItem[]>([]);
   const [loadingReports, setLoadingReports] = useState(true);
 
-  React.useEffect(() => {
-    let isMounted = true;
-    async function loadUserReports() {
-      if (!user) return;
-      const res = await fetchReports({ reporter_user_id: user.id });
-      if (isMounted) {
-        setMyReports(res.data || []);
-        setLoadingReports(false);
-      }
+  // Sync state
+  useEffect(() => {
+    if (profile) {
+      setDisplayName(profile.display_name || "");
+      setBio(profile.bio || "");
     }
-    loadUserReports();
-    return () => {
-      isMounted = false;
-    };
-  }, [user]);
+  }, [profile]);
 
-  const handleSave = async (e: React.FormEvent) => {
+  const loadData = useCallback(async (isCancelledRef?: { current: boolean }) => {
+    const userId = user?.id;
+    if (!userId) {
+      if (isCancelledRef?.current) return;
+      setLoadingReports(false);
+      return;
+    }
+    if (isCancelledRef?.current) return;
+    setLoadingReports(true);
+
+    try {
+      // 1. Fetch user's own reports and saved reports in parallel
+      const [myRes, savedRes] = await Promise.all([
+        fetchReports({ reporter_user_id: userId }),
+        fetchSavedReports(userId),
+      ]);
+
+      if (isCancelledRef?.current) return;
+      if (myRes.data) {
+        setMyReports(myRes.data);
+      }
+      if (savedRes.data) {
+        setSavedReports(savedRes.data);
+      }
+    } catch (err) {
+      console.error("Profile load error:", err);
+    } finally {
+      if (isCancelledRef?.current) return;
+      setLoadingReports(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    const isCancelledRef = { current: false };
+    loadData(isCancelledRef);
+    return () => {
+      isCancelledRef.current = true;
+    };
+  }, [loadData]);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     setSaving(true);
 
     try {
+      const supabase = createClient();
       await supabase
         .from("user_profiles")
         .update({
@@ -67,15 +103,21 @@ export default function ProfilePage() {
     }
   };
 
+  const handleSavedChange = (reportId: string, isSaved: boolean) => {
+    if (!isSaved) {
+      setSavedReports((prev) => prev.filter((r) => r.id !== reportId));
+    }
+  };
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-12">
+    <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-fade-in pb-12">
       {/* Profile Header Card */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-          <div className="flex items-center gap-5">
-            <div className="w-20 h-20 rounded-2xl bg-orange-500/20 text-orange-600 dark:text-orange-400 font-extrabold text-2xl flex items-center justify-center ring-4 ring-orange-500/10 flex-shrink-0">
+      <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 shadow-xs">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold text-xl flex items-center justify-center border border-orange-500/20 flex-shrink-0">
               {profile?.avatar_path ? (
-                <img src={profile.avatar_path} alt="" className="w-full h-full rounded-2xl object-cover" />
+                <img src={profile.avatar_path} alt="" className="w-full h-full rounded-xl object-cover" />
               ) : (
                 (profile?.display_name || user?.email || "U").charAt(0).toUpperCase()
               )}
@@ -83,12 +125,12 @@ export default function ProfilePage() {
 
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
-                  {profile?.display_name || t.common.anonymous}
+                <h1 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                  {profile?.display_name || user?.email?.split("@")[0] || "Warga MuaraKu"}
                 </h1>
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Warga Terverifikasi
+                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" />
+                  Warga Terdaftar
                 </span>
               </div>
 
@@ -97,16 +139,16 @@ export default function ProfilePage() {
                 <span>{user?.email || "Belum masuk akun"}</span>
               </p>
 
-              <p className="text-xs text-zinc-400 flex items-center gap-1.5 pt-0.5">
+              <p className="text-xs text-zinc-400 flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5" />
-                <span>Bergabung sejak Oktober 2026</span>
+                <span>Akun Aktif</span>
               </p>
             </div>
           </div>
 
           <button
             onClick={() => setIsEditing(!isEditing)}
-            className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-bold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 flex items-center gap-1.5 transition-colors"
+            className="px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 flex items-center gap-1.5 transition-colors"
           >
             <Edit3 className="w-3.5 h-3.5" />
             <span>{isEditing ? "Batal" : "Sunting Profil"}</span>
@@ -114,11 +156,11 @@ export default function ProfilePage() {
         </div>
 
         {/* Bio / Edit Form */}
-        <div className="mt-6 pt-6 border-t border-zinc-100 dark:border-zinc-800">
+        <div className="mt-5 pt-5 border-t border-zinc-100 dark:border-zinc-800/80">
           {isEditing ? (
-            <form onSubmit={handleSave} className="space-y-4 max-w-lg">
+            <form onSubmit={handleSaveProfile} className="space-y-3 max-w-md">
               <div>
-                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
                   Nama Tampilan
                 </label>
                 <input
@@ -126,12 +168,12 @@ export default function ProfilePage() {
                   required
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  className="w-full px-3 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
                   Bio Singkat
                 </label>
                 <textarea
@@ -139,14 +181,14 @@ export default function ProfilePage() {
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   placeholder="Ceritakan sedikit tentang Anda..."
-                  className="w-full px-3.5 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500 resize-none"
+                  className="w-full px-3 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500 resize-none"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition-colors"
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-xs"
               >
                 {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 <Save className="w-3.5 h-3.5" />
@@ -154,31 +196,72 @@ export default function ProfilePage() {
               </button>
             </form>
           ) : (
-            <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 max-w-2xl leading-relaxed">
-              {profile?.bio ||
-                "Peduli sesama warga kampus. Siap membantu mengembalikan barang yang tertinggal."}
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 max-w-2xl leading-relaxed">
+              {profile?.bio || "Peduli sesama warga. Siap membantu mengembalikan barang yang tertinggal."}
             </p>
           )}
         </div>
       </div>
 
-      {/* Report History */}
+      {/* Tabs: My Reports vs Saved */}
       <div className="space-y-4">
-        <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-          <FileText className="w-4 h-4 text-orange-500" />
-          <span>Riwayat Laporan Saya ({myReports.length})</span>
-        </h2>
+        <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+          <button
+            onClick={() => setActiveTab("my_reports")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
+              activeTab === "my_reports"
+                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Laporan Saya ({myReports.length})</span>
+          </button>
 
-        {myReports.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {myReports.map((report) => (
-              <ReportCard key={report.id} report={report} />
+          <button
+            onClick={() => setActiveTab("saved")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
+              activeTab === "saved"
+                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+            }`}
+          >
+            <Bookmark className="w-3.5 h-3.5" />
+            <span>Laporan Disimpan ({savedReports.length})</span>
+          </button>
+        </div>
+
+        {/* Content */}
+        {loadingReports ? (
+          <LoadingPattern />
+        ) : activeTab === "my_reports" ? (
+          myReports.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {myReports.map((report) => (
+                <ReportCard key={report.id} report={report} />
+              ))}
+            </div>
+          ) : (
+            <EmptyPattern
+              title="Belum ada laporan yang Anda buat"
+              description="Semua laporan kehilangan dan temuan yang Anda daftarkan akan tertera di sini."
+            />
+          )
+        ) : savedReports.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {savedReports.map((report) => (
+              <ReportCard
+                key={report.id}
+                report={report}
+                onSavedChange={handleSavedChange}
+              />
             ))}
           </div>
         ) : (
-          <div className="p-8 text-center rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-zinc-400">
-            Belum ada riwayat laporan yang dibuat.
-          </div>
+          <EmptyPattern
+            title="Belum ada laporan yang disimpan"
+            description="Tandai laporan penting menggunakan tombol simpan agar mudah diakses kembali di sini."
+          />
         )}
       </div>
     </div>

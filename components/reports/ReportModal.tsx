@@ -1,439 +1,613 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
-import { useI18n } from "@/lib/i18n";
-import { createClient } from "@/lib/supabase/client";
 import {
   X,
-  FilePlus,
-  Search,
-  CheckCircle,
+  Plus,
   Lock,
-  ShieldCheck,
-  MapPin,
-  Calendar,
   Upload,
   AlertCircle,
   Loader2,
-  Warehouse,
+  Image as ImageIcon,
+  CheckCircle2,
 } from "lucide-react";
-import { ReportItem } from "./ReportCard";
+import {
+  createReport,
+  updateReport,
+  fetchCategories,
+  ReportCategory,
+  ReportDetailItem,
+  CreateReportInput,
+} from "@/lib/supabase/reports";
 
 interface ReportModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultType?: "lost" | "found";
-  onReportCreated?: (report: ReportItem) => void;
+  editReport?: ReportDetailItem | null;
+  onSuccess?: (report: ReportDetailItem) => void;
 }
 
 export function ReportModal({
   isOpen,
   onClose,
   defaultType = "lost",
-  onReportCreated,
+  editReport,
+  onSuccess,
 }: ReportModalProps) {
-  const { user, profile } = useAuth();
-  const { t } = useI18n();
-  const supabase = createClient();
+  const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [type, setType] = useState<"lost" | "found">(defaultType);
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("Elektronik");
-  const [locationName, setLocationName] = useState("");
-  const [incidentDate, setIncidentDate] = useState(
-    new Date().toISOString().slice(0, 16)
+  const [categories, setCategories] = useState<ReportCategory[]>([]);
+  const [reportType, setReportType] = useState<"lost" | "found">(
+    editReport ? editReport.report_type : defaultType
   );
-  const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
-  const [secretClue, setSecretClue] = useState("");
-  const [serialNumber, setSerialNumber] = useState("");
-  const [depositAtDesk, setDepositAtDesk] = useState(false);
+  const [title, setTitle] = useState(editReport?.title || "");
+  const [description, setDescription] = useState(editReport?.description || "");
+  const [categoryId, setCategoryId] = useState<string>(editReport?.category_id || "");
+  const [locationLabel, setLocationLabel] = useState(editReport?.location_label || "");
+  const [city, setCity] = useState(editReport?.city || "");
+  const [occurredAt, setOccurredAt] = useState(
+    editReport?.occurred_at
+      ? new Date(editReport.occurred_at).toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16)
+  );
+  const [color, setColor] = useState(editReport?.color || "");
+  const [brand, setBrand] = useState(editReport?.brand || "");
+  const [model, setModel] = useState(editReport?.model || "");
+
+  // Private details
+  const [ownerOnlyClues, setOwnerOnlyClues] = useState(
+    editReport?.private_details?.owner_only_clues || ""
+  );
+  const [privateContact, setPrivateContact] = useState(
+    editReport?.private_details?.private_contact || ""
+  );
+  const [contactPreference, setContactPreference] = useState<"in_app" | "email" | "other">(
+    editReport?.private_details?.contact_preference || "in_app"
+  );
+
+  // File uploads
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  // Load categories when modal is opened
+  useEffect(() => {
+    if (!isOpen) return;
+    let mounted = true;
+    fetchCategories().then((res) => {
+      if (mounted && res.data) {
+        setCategories(res.data);
+        if (!editReport && res.data.length > 0) {
+          setCategoryId((curr) => curr || res.data[0].id);
+        }
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [isOpen, editReport]);
 
-  const categories = [
-    "Elektronik",
-    "Dompet & kartu",
-    "Tas & ransel",
-    "Kunci & aksesori",
-    "Buku & dokumen",
-    "Perlengkapan",
-    "Identitas",
-    "Lainnya",
-  ];
+  const previewUrlsRef = useRef<string[]>([]);
+  useEffect(() => {
+    previewUrlsRef.current = previewUrls;
+  }, [previewUrls]);
+
+  // Cleanup object URLs on unmount to prevent browser memory leaks
+  useEffect(() => {
+    return () => {
+      previewUrlsRef.current.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+      });
+      previewUrlsRef.current = [];
+    };
+  }, []);
+
+  // Sync editReport state if provided
+  useEffect(() => {
+    if (editReport) {
+      setReportType(editReport.report_type);
+      setTitle(editReport.title);
+      setDescription(editReport.description);
+      setCategoryId(editReport.category_id || "");
+      setLocationLabel(editReport.location_label || "");
+      setCity(editReport.city || "");
+      setOccurredAt(
+        editReport.occurred_at
+          ? new Date(editReport.occurred_at).toISOString().slice(0, 16)
+          : new Date().toISOString().slice(0, 16)
+      );
+      setColor(editReport.color || "");
+      setBrand(editReport.brand || "");
+      setModel(editReport.model || "");
+      setOwnerOnlyClues(editReport.private_details?.owner_only_clues || "");
+      setPrivateContact(editReport.private_details?.private_contact || "");
+      setContactPreference(editReport.private_details?.contact_preference || "in_app");
+    } else {
+      setReportType(defaultType);
+    }
+  }, [editReport, defaultType]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+
+    const validFiles: File[] = [];
+    for (const f of files) {
+      if (f.size > 8388608) {
+        setErrorMsg(`Berkas "${f.name}" melebihi ukuran batas 8MB`);
+        return;
+      }
+      validFiles.push(f);
+    }
+
+    setSelectedFiles((prev) => [...prev, ...validFiles]);
+    const newPreviews = validFiles.map((f) => URL.createObjectURL(f));
+    setPreviewUrls((prev) => [...prev, ...newPreviews]);
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setPreviewUrls((prev) => {
+      URL.revokeObjectURL(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (!user) {
+      setErrorMsg("Anda harus masuk terlebih dahulu untuk membuat atau mengubah laporan");
+      return;
+    }
+
+    if (title.trim().length < 3 || title.trim().length > 140) {
+      setErrorMsg("Judul harus antara 3 dan 140 karakter");
+      return;
+    }
+
+    if (description.trim().length < 5 || description.trim().length > 5000) {
+      setErrorMsg("Deskripsi harus antara 5 dan 5000 karakter");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const newReportId = `rep-${Date.now()}`;
-      const newReport: ReportItem = {
-        id: newReportId,
-        type,
-        title: title.trim(),
-        description: description.trim(),
-        category,
-        location_name: locationName.trim(),
-        incident_date: "Baru saja",
-        status: "active",
-        image_url:
-          imageUrl.trim() ||
-          (type === "lost"
-            ? "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=600&auto=format&fit=crop&q=80"
-            : "https://images.unsplash.com/photo-1582139329536-e7284fece509?w=600&auto=format&fit=crop&q=80"),
-        author_name: profile?.display_name || user?.email?.split("@")[0] || "Warga MuaraKu",
-        is_verified_staff: depositAtDesk,
-      };
-
-      // Try inserting into Supabase if authenticated
-      if (user) {
-        try {
-          await supabase.from("reports").insert({
-            user_id: user.id,
-            report_type: type,
+      if (editReport) {
+        // UPDATE existing report
+        const res = await updateReport(
+          editReport.id,
+          {
             title: title.trim(),
             description: description.trim(),
-            location_freeform: locationName.trim(),
-            incident_at: new Date(incidentDate).toISOString(),
-            status: "active",
-          });
-
-          // Insert private secret clues to report_private_details
-          if (secretClue) {
-            await supabase.from("report_private_details").insert({
-              report_id: newReportId,
-              private_clues: secretClue.trim(),
-              private_serial_number: serialNumber.trim() || null,
-            });
+            category_id: categoryId || null,
+            location_label: locationLabel.trim() || null,
+            city: city.trim() || null,
+            occurred_at: new Date(occurredAt).toISOString(),
+            color: color.trim() || null,
+            brand: brand.trim() || null,
+            model: model.trim() || null,
+          },
+          {
+            owner_only_clues: ownerOnlyClues.trim() || null,
+            private_contact: privateContact.trim() || null,
+            contact_preference: contactPreference,
           }
-        } catch (dbErr) {
-          console.warn("Supabase insert notice (fallback to memory):", dbErr);
+        );
+
+        if (!res.success || res.error) {
+          throw new Error(res.error?.message || "Gagal memperbarui laporan");
+        }
+
+        setSuccessMsg("Laporan berhasil diperbarui");
+        if (onSuccess) {
+          onSuccess({
+            ...editReport,
+            title: title.trim(),
+            description: description.trim(),
+            category_id: categoryId || null,
+            location_label: locationLabel.trim() || null,
+            city: city.trim() || null,
+            occurred_at: new Date(occurredAt).toISOString(),
+            color: color.trim() || null,
+            brand: brand.trim() || null,
+            model: model.trim() || null,
+          });
+        }
+      } else {
+        // CREATE new report
+        const input: CreateReportInput = {
+          report_type: reportType,
+          title: title.trim(),
+          description: description.trim(),
+          category_id: categoryId || null,
+          location_label: locationLabel.trim() || null,
+          city: city.trim() || null,
+          occurred_at: new Date(occurredAt).toISOString(),
+          color: color.trim() || null,
+          brand: brand.trim() || null,
+          model: model.trim() || null,
+          owner_only_clues: ownerOnlyClues.trim() || null,
+          private_contact: privateContact.trim() || null,
+          contact_preference: contactPreference,
+        };
+
+        const res = await createReport(input, selectedFiles);
+
+        if (res.error || !res.data) {
+          throw new Error(res.error?.message || "Gagal membuat laporan");
+        }
+
+        setSuccessMsg(
+          "Laporan berhasil dibuat dan sedang menunggu peninjauan moderator."
+        );
+        if (onSuccess) {
+          onSuccess(res.data);
         }
       }
 
-      if (onReportCreated) {
-        onReportCreated(newReport);
-      }
-
-      setSuccessMsg("Laporan berhasil diterbitkan!");
       setTimeout(() => {
         onClose();
-        setSuccessMsg(null);
-        // Reset form
-        setTitle("");
-        setDescription("");
-        setLocationName("");
-        setSecretClue("");
-        setSerialNumber("");
-      }, 1200);
+      }, 1000);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Gagal menyimpan laporan";
+      const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat memproses laporan";
       setErrorMsg(msg);
     } finally {
       setLoading(false);
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-zinc-950/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-zinc-900 w-full max-w-2xl rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-        {/* Header with Type Toggle */}
-        <div className="p-5 sm:p-6 border-b border-zinc-200 dark:border-zinc-800 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center">
-                <FilePlus className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-50">
-                  {type === "lost" ? t.reports.modal_title_lost : t.reports.modal_title_found}
-                </h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Sistem temu kembali sipil dengan enkripsi ciri privat
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              aria-label="Tutup"
-            >
-              <X className="w-5 h-5" />
-            </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-xs animate-fade-in">
+      <div className="bg-white dark:bg-[#121214] w-full max-w-2xl rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xl flex flex-col max-h-[90vh] overflow-hidden">
+        {/* Modal Header */}
+        <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+              {editReport
+                ? "Edit Laporan"
+                : reportType === "lost"
+                ? "Buat Laporan Kehilangan"
+                : "Buat Laporan Temuan"}
+            </h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              {editReport
+                ? "Perbarui rincian informasi laporan barang Anda"
+                : "Isi data dengan akurat agar mempercepat proses verifikasi temu kembali"}
+            </p>
           </div>
 
-          {/* Toggle Type Finder vs Seeker */}
-          <div className="grid grid-cols-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl gap-1">
-            <button
-              type="button"
-              onClick={() => setType("found")}
-              className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                type === "found"
-                  ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-              }`}
-            >
-              <CheckCircle className="w-4 h-4 text-emerald-600" />
-              <span>Lapor Temuan (Finder)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setType("lost")}
-              className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                type === "lost"
-                  ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs"
-                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-              }`}
-            >
-              <Search className="w-4 h-4 text-orange-500" />
-              <span>Lapor Kehilangan (Seeker)</span>
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            aria-label="Tutup modal"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 custom-scrollbar">
+        {/* Modal Body */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
           {errorMsg && (
-            <div className="flex items-center gap-2 p-3.5 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-xl">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <div className="p-3.5 rounded-xl text-xs bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="flex items-center gap-2 p-3.5 text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-xl">
-              <CheckCircle className="w-4 h-4 flex-shrink-0" />
+            <div className="p-3.5 rounded-xl text-xs bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>{successMsg}</span>
             </div>
           )}
 
-          {/* ================= BAGIAN 1: ATRIBUT PUBLIK ================= */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-1">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
-                  BAGIAN 1
-                </span>
-                <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                  Atribut Publik (Tampil di Feed)
-                </span>
-              </div>
-              <span className="text-xs text-zinc-400">Dilihat seluruh warga</span>
+          {/* Type Toggle (Disabled during edit) */}
+          {!editReport && (
+            <div className="flex rounded-xl bg-zinc-100 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setReportType("lost")}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
+                  reportType === "lost"
+                    ? "bg-white dark:bg-zinc-800 text-rose-600 dark:text-rose-400 shadow-xs"
+                    : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
+                }`}
+              >
+                Barang Hilang (Lost)
+              </button>
+              <button
+                type="button"
+                onClick={() => setReportType("found")}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
+                  reportType === "found"
+                    ? "bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs"
+                    : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
+                }`}
+              >
+                Barang Ditemukan (Found)
+              </button>
+            </div>
+          )}
+
+          {/* Title */}
+          <div>
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+              Judul Barang <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              minLength={3}
+              maxLength={140}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Contoh: Dompet Kulit Coklat merk Bifold"
+              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500"
+            />
+            <span className="text-[10px] text-zinc-400 mt-1 block">3 - 140 karakter</span>
+          </div>
+
+          {/* Category & Date Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Kategori
+              </label>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              >
+                <option value="">Pilih Kategori</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name_id}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Judul Laporan */}
             <div>
-              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                {t.reports.field_title} <span className="text-red-500">*</span>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Waktu Kejadian
+              </label>
+              <input
+                type="datetime-local"
+                value={occurredAt}
+                onChange={(e) => setOccurredAt(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+            </div>
+          </div>
+
+          {/* Location & City Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Lokasi Spesifik / Tempat
               </label>
               <input
                 type="text"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={t.reports.field_title_placeholder}
-                className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                maxLength={200}
+                value={locationLabel}
+                onChange={(e) => setLocationLabel(e.target.value)}
+                placeholder="Contoh: Stasiun Gambir Gate 2"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
             </div>
 
-            {/* Kategori Pills */}
             <div>
-              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                {t.reports.field_category} <span className="text-red-500">*</span>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Kota
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {categories.map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setCategory(cat)}
-                    className={`py-2 px-2.5 rounded-xl text-xs font-semibold text-center border transition-all ${
-                      category === cat
-                        ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold"
-                        : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700"
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Lokasi & Waktu Kejadian */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <div>
-                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  {t.reports.field_location} <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <MapPin className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    required
-                    value={locationName}
-                    onChange={(e) => setLocationName(e.target.value)}
-                    placeholder={t.reports.field_location_placeholder}
-                    className="w-full pl-9 pr-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  {t.reports.field_date} <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Calendar className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="datetime-local"
-                    required
-                    value={incidentDate}
-                    onChange={(e) => setIncidentDate(e.target.value)}
-                    className="w-full pl-9 pr-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Deskripsi Publik Aman */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                  {t.reports.field_description}
-                </label>
-                <span className="text-[11px] text-zinc-400">Hindari ciri rahasia di sini</span>
-              </div>
-              <textarea
-                rows={3}
-                required
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder={t.reports.field_description_placeholder}
-                className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 resize-none"
+              <input
+                type="text"
+                maxLength={100}
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="Contoh: Jakarta Pusat"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
             </div>
+          </div>
 
-            {/* Foto Barang */}
+          {/* Color, Brand, Model Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                {t.reports.field_photos} (URL Gambar / Pratinjau)
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Warna
               </label>
-              <div className="relative">
-                <Upload className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="url"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://... (atau biarkan kosong untuk foto standar)"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+              <input
+                type="text"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                placeholder="Misal: Cokelat tua"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Merek / Brand
+              </label>
+              <input
+                type="text"
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                placeholder="Misal: Fossil"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Model / Seri
+              </label>
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="Misal: Derrick RFID"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100"
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+              Deskripsi Publik <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              required
+              rows={3}
+              minLength={5}
+              maxLength={5000}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Jelaskan ciri umum barang yang dapat dilihat oleh publik..."
+              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            />
+          </div>
+
+          {/* Photo Upload Area */}
+          {!editReport && (
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Foto Barang (Maksimal 8MB / foto)
+              </label>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                className="hidden"
+              />
+
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-zinc-50/50 dark:bg-zinc-900/50"
+              >
+                <Upload className="w-5 h-5 text-zinc-400 mb-1.5" />
+                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Pilih foto dari perangkat
+                </span>
+                <span className="text-[10px] text-zinc-400 mt-0.5">
+                  Format JPG, PNG, atau WEBP. Disimpan di bucket privat terenkripsi.
+                </span>
+              </div>
+
+              {previewUrls.length > 0 && (
+                <div className="grid grid-cols-4 gap-2 mt-3">
+                  {previewUrls.map((url, idx) => (
+                    <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800">
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(idx)}
+                        className="absolute top-1 right-1 p-1 bg-black/70 hover:bg-black text-white rounded-md text-[10px]"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Private Verification Clues Section */}
+          <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/80">
+            <div className="flex items-center gap-2 mb-2">
+              <Lock className="w-3.5 h-3.5 text-orange-500" />
+              <h3 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                Ciri Rahasia &amp; Privasi Pemilik
+              </h3>
+            </div>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-3 leading-relaxed">
+              Informasi di bawah ini dilindungi enkripsi RLS dan hanya dapat dilihat oleh Anda serta diverifikasi saat proses klaim. Informasi ini <strong>tidak akan</strong> muncul pada feed atau pencarian publik.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Ciri Rahasia Khusus (Owner Clues)
+                </label>
+                <textarea
+                  rows={2}
+                  maxLength={2000}
+                  value={ownerOnlyClues}
+                  onChange={(e) => setOwnerOnlyClues(e.target.value)}
+                  placeholder="Misal: Nomor seri tersembunyi, foto di balik case, goresan di sudut kiri..."
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
                 />
               </div>
-            </div>
-          </div>
 
-          {/* ================= BATAS ENKRIPSI PRIVASI SIPIL ================= */}
-          <div className="relative py-2">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-dashed border-zinc-300 dark:border-zinc-700"></div>
-            </div>
-            <div className="relative flex justify-center">
-              <span className="bg-[#FFFCF8] dark:bg-[#18181B] px-3.5 py-1 rounded-full border border-zinc-200 dark:border-zinc-700 text-[11px] font-bold text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                Batas Enkripsi Privasi Sipil
-              </span>
-            </div>
-          </div>
-
-          {/* ================= BAGIAN 2: DATA VERIFIKASI PRIVAT ================= */}
-          <div className="p-4 sm:p-5 rounded-2xl border-2 border-orange-500/30 bg-orange-500/[0.04] space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-orange-500 text-white flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-500/20 text-orange-600 dark:text-orange-400">
-                    {t.reports.private_section_badge}
-                  </span>
-                  <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                    {t.reports.private_section_title}
-                  </span>
-                </div>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 leading-relaxed">
-                  {t.reports.private_section_desc}
-                </p>
-              </div>
-            </div>
-
-            {/* Input Ciri Rahasia 1 */}
-            <div>
-              <label className="block text-xs font-semibold text-zinc-800 dark:text-zinc-200 mb-1.5">
-                {t.reports.private_clue_label} <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                rows={2}
-                required
-                value={secretClue}
-                onChange={(e) => setSecretClue(e.target.value)}
-                placeholder={t.reports.private_clue_placeholder}
-                className="w-full px-3.5 py-2.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 resize-none"
-              />
-              <p className="text-[11px] text-zinc-400 mt-1">
-                Pencari sah wajib membuktikan ciri ini secara tepat saat mengajukan klaim.
-              </p>
-            </div>
-
-            {/* Input Ciri Rahasia 2 (Nomor Seri / IMEI) */}
-            <div>
-              <label className="block text-xs font-semibold text-zinc-800 dark:text-zinc-200 mb-1.5">
-                Nomor Seri / IMEI / Inisial Khusus (Opsional)
-              </label>
-              <input
-                type="text"
-                value={serialNumber}
-                onChange={(e) => setSerialNumber(e.target.value)}
-                placeholder="Misal: S/N gawai, 4 digit akhir kartu ATM, inisial di balik resleting"
-                className="w-full px-3.5 py-2.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-              />
-            </div>
-
-            {/* Toggle Titipkan di Pos Petugas */}
-            <div className="p-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <Warehouse className="w-5 h-5 text-amber-500 flex-shrink-0" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                    Titipkan ke Pos Petugas Resmi?
-                  </p>
-                  <p className="text-[11px] text-zinc-400">
-                    Barang diserahkan ke satpam/posko kampus agar lebih aman.
-                  </p>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                    Preferensi Kontak
+                  </label>
+                  <select
+                    value={contactPreference}
+                    onChange={(e) => setContactPreference(e.target.value as "in_app" | "email" | "other")}
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100"
+                  >
+                    <option value="in_app">Melalui Pesan Aplikasi (MuaraKu Chat)</option>
+                    <option value="email">Melalui Email</option>
+                    <option value="other">Kontak Lain</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                    Kontak Tambahan (Privat)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={250}
+                    value={privateContact}
+                    onChange={(e) => setPrivateContact(e.target.value)}
+                    placeholder="Misal: nomor WhatsApp atau Telegram"
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100"
+                  />
                 </div>
               </div>
-              <input
-                type="checkbox"
-                checked={depositAtDesk}
-                onChange={(e) => setDepositAtDesk(e.target.checked)}
-                className="w-4 h-4 rounded text-orange-500 focus:ring-orange-500 border-zinc-300 dark:border-zinc-600"
-              />
             </div>
           </div>
 
-          {/* Submit Button */}
-          <div className="pt-2">
+          {/* Modal Footer Controls */}
+          <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="px-4 py-2 rounded-xl text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              Batal
+            </button>
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 px-4 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-sm shadow-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white disabled:opacity-50 flex items-center gap-1.5 transition-colors shadow-xs"
             >
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              <span>{type === "lost" ? t.reports.submit_lost : t.reports.submit_found}</span>
+              {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{editReport ? "Simpan Perubahan" : "Terbitkan Laporan"}</span>
             </button>
           </div>
         </form>

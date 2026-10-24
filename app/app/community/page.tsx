@@ -30,7 +30,7 @@ interface DBMessage {
 export default function CommunityChatPage() {
   const { user, profile } = useAuth();
   const { t, locale } = useI18n();
-  const supabase = createClient();
+  const supabase = React.useMemo(() => createClient(), []);
 
   const [messages, setMessages] = useState<DBMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,7 +133,7 @@ export default function CommunityChatPage() {
           table: "messages",
           filter: `conversation_id=eq.${GLOBAL_CONVERSATION_ID}`,
         },
-        async (payload) => {
+        async (payload: { new: Record<string, unknown> }) => {
           const newMsg = payload.new as {
             id: string;
             sender_id: string;
@@ -240,7 +240,7 @@ export default function CommunityChatPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-7.5rem)] flex flex-col rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden animate-fade-in">
+    <div className="h-[calc(100dvh-11.75rem-env(safe-area-inset-bottom))] md:h-[calc(100vh-7.5rem)] flex flex-col rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden animate-fade-in">
       {/* Header */}
       <div className="p-4 sm:p-5 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-4 bg-white dark:bg-zinc-900 z-10">
         <div className="flex items-center gap-3">
