@@ -30,7 +30,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variantClasses = {
       primary:
-        "bg-[#FB923C] hover:bg-[#EA580C] text-white shadow-xs focus-visible:ring-2 focus-visible:ring-[#C96A1B] focus-visible:ring-offset-2",
+        "bg-[#FB923C] hover:bg-[#EA580C] text-zinc-950 shadow-xs focus-visible:ring-2 focus-visible:ring-[#C96A1B] focus-visible:ring-offset-2",
       secondary:
         "bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 border border-zinc-200/80 dark:border-zinc-700",
       outline:

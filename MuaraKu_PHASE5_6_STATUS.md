@@ -4,14 +4,28 @@
 membuktikan bahwa Supabase live menerima operasi atau memakai schema/RLS yang
 sama dengan file lokal.
 
+### Follow-up landing feed (2026-10-25)
+
+- Query feed publik berhasil diuji read-only setelah key di `.env.local`
+  disamakan dengan key yang terdaftar untuk URL project; file lokal bernama
+  `.env .local` (memakai spasi) memiliki key valid tetapi tidak dimuat Next.js.
+  Endpoint `/api/public/reports` kini HTTP 200 dan mengembalikan 6 laporan
+  `approved`.
+- Ini hanya membuktikan pembacaan terbatas untuk feed publik. Login, CRUD
+  Finder/Seeker, operasi tulis, role, dan isolasi RLS lintas pengguna belum
+  diuji ulang.
+- Taste Skill production inspector landing (1440/768/390): 0 FAIL, 3 WARN.
+  Screenshot final pada semua viewport telah dibuka; tidak ada screenshot
+  landing yang mengklaim alur login/staf.
+
 ## Batas dan kesimpulan utama
 
 - Tidak ada deployment, SQL yang dijalankan, atau perubahan schema yang
   diterapkan selama pekerjaan ini.
-- Supabase live belum dapat diverifikasi. Script pengujian inti dan feed publik
-  gagal dengan `Unregistered API key`. Ini memblokir pengujian akun, data, RLS,
-  dan interaksi database live; bukan bukti bahwa implementasi database live
-  berhasil.
+- Pembacaan feed publik live berhasil, tetapi Supabase live lainnya belum
+  terverifikasi. Script pengujian inti sebelumnya gagal dengan `Unregistered
+  API key` sebelum key aktif diperbaiki; pengujian auth dan operasi database
+  lain belum dijalankan ulang.
 - `MuaraKu_Fresh_Install_v2.2.sql` dan dokumentasi schema adalah referensi lokal,
   bukan bukti schema, grant, atau policy aktif di proyek Supabase.
 - Seluruh fitur database di bawah berstatus implementasi kode saja sampai diuji
@@ -38,7 +52,7 @@ sama dengan file lokal.
 
 | Pemeriksaan | Hasil | Catatan |
 |---|---|---|
-| Koneksi feed/Auth Supabase | BLOCKED | `scripts/test-sesi3-core.mjs` dan request feed mendapat `Unregistered API key`. |
+| Koneksi feed/Auth Supabase | PARTIAL | Feed endpoint HTTP 200 mengembalikan 6 laporan approved setelah key aktif diperbaiki. Auth dan script pengujian inti belum dijalankan ulang. |
 | RLS, grants, Storage policies live | NOT RUN | Tidak ada akses read-only terverifikasi ke schema/policy proyek live. |
 | Pengujian lintas pengguna A/B | NOT RUN | Tidak ada dua identitas uji yang dapat dipakai dengan konfigurasi live yang valid. |
 | Akses guest ke Admin | PASS | Route Admin dan Support staf mengarahkan guest ke alur login. Ini bukan bukti role authorization live. |
@@ -57,11 +71,12 @@ sama dengan file lokal.
 | `npm run lint` | PASS tanpa error; 29 warning pada file lain, tidak diperbaiki karena di luar scope. |
 | `npx next typegen` + `npx tsc --noEmit` | PASS |
 | `npm run build` | PASS |
+| Production Taste Skill Inspector landing, 1440/768/390 px | PASS: 0 FAIL, 3 WARN; screenshot final dibuka dan feed menunjukkan laporan database nyata. |
 | Production Taste Skill Inspector Support, 1440/768/390 px | PASS: 0 FAIL, 0 WARN. Yang diperiksa adalah halaman guest; bukan isi tiket login atau workspace staf. |
 | Screenshot final Support | Dilihat pada tiga viewport. Tidak ada klaim inspeksi visual untuk Admin/workspace staf ber-role. |
 | Support, robots, sitemap HTTP smoke tests | PASS (HTTP 200) |
 | Guest Admin route guard | PASS |
-| Pengujian autentikasi/database live | BLOCKED oleh `Unregistered API key`. |
+| Pengujian autentikasi/database live selain feed publik | NOT RUN setelah key feed diperbaiki. |
 | Viewport 360/390/768/1024/desktop seluruh aplikasi | PARTIAL; hanya Support guest yang diperiksa dengan inspector pada 1440/768/390. |
 | Screen reader dan audit WCAG formal | NOT RUN; bukan sertifikasi WCAG. |
 
@@ -91,7 +106,7 @@ Skor ini tidak menilai workspace staf, alur pengguna yang login, atau kualitas r
 
 ### Blocker berprioritas
 
-1. **Tinggi — Koneksi Supabase:** `Unregistered API key` menghentikan verifikasi auth/feed dan semua alur database live. Pemilik proyek perlu memeriksa konfigurasi URL/key di lingkungan lokal dan dashboard Supabase secara privat; jangan kirim nilai secret.
+1. **Tinggi — Auth dan akses database live:** Feed publik berhasil setelah `.env.local` disinkronkan dengan key yang terdaftar; auth, Finder/Seeker CRUD, operasi tulis, dan RLS tetap harus diuji memakai identitas terpisah. Jangan kirim nilai secret.
 2. **Tinggi — Schema/policy live belum diketahui:** bandingkan tabel, kolom, grants, RLS, serta Storage policies aktif dengan installer yang disetujui menggunakan akses read-only sebelum rilis.
 3. **Tinggi — Aksi moderasi belum aman untuk diaktifkan:** siapkan dan tinjau jalur transaksi/RPC update + audit, lalu uji dengan role terpisah; proposal lokal belum diterapkan.
 4. **Sedang — Role dan alur end-to-end:** sediakan identitas uji user, support, moderator, dan admin untuk menguji akses, privasi, Support, laporan, safety, dan AI secara nyata.

@@ -92,7 +92,7 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-canvas dark:bg-[#18181B] bg-page-gradient text-main-text transition-colors">
+    <div className="min-h-screen flex flex-col bg-canvas dark:bg-[#18181B] text-main-text transition-colors">
       <PublicNavbar />
 
       <main className="flex-1">
@@ -153,6 +153,26 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* COMMUNITY FEED — approved reports from the database */}
+        <section
+          id="community-reports"
+          className="px-4 sm:px-6 pb-16 sm:pb-20 max-w-[1320px] mx-auto"
+        >
+          <div className="max-w-xl space-y-2 mb-8">
+            <h2 className="text-2xl font-bold tracking-tight">
+              {locale === "en"
+                ? "Recent lost and found reports"
+                : "Laporan barang terbaru"}
+            </h2>
+            <p className="text-sm text-secondary-text leading-relaxed">
+              {locale === "en"
+                ? "Browse real community reports approved for public viewing."
+                : "Lihat laporan warga yang telah disetujui untuk ditampilkan secara publik."}
+            </p>
+          </div>
+          <PublicReportFeed />
+        </section>
+
         {/* ASSURANCES */}
         <section className="px-4 sm:px-6 pb-16 sm:pb-20 max-w-[1320px] mx-auto">
           <div className="max-w-xl space-y-2">
@@ -179,23 +199,6 @@ export default function HomePage() {
               </div>
             ))}
           </div>
-        </section>
-
-        {/* COMMUNITY FEED — approved reports from the database */}
-        <section className="px-4 sm:px-6 pb-16 sm:pb-20 max-w-[1320px] mx-auto">
-          <div className="max-w-xl space-y-2 mb-8">
-            <h2 className="text-2xl font-bold tracking-tight">
-              {locale === "en"
-                ? "Latest from the community"
-                : "Terbaru dari komunitas"}
-            </h2>
-            <p className="text-sm text-secondary-text leading-relaxed">
-              {locale === "en"
-                ? "Public reports that have been approved by moderators."
-                : "Laporan publik yang telah disetujui moderator."}
-            </p>
-          </div>
-          <PublicReportFeed />
         </section>
 
         {/* FAQ */}

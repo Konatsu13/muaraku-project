@@ -79,18 +79,24 @@ begin
     raise exception 'Message must be between 1 and 5000 characters';
   end if;
 
-  select m, c.kind into target_message, target_conversation_kind
+  select m.* into target_message
   from public.messages m
-  join public.conversations c on c.id = m.conversation_id
   where m.id = p_message_id
-  for update of m;
+  for update;
 
   if not found
      or target_message.sender_id is distinct from auth.uid()
-     or target_conversation_kind <> 'global'
      or target_message.deleted_at is not null
      or target_message.moderation_status <> 'approved'
      or target_message.message_kind <> 'text' then
+    raise exception 'Message not found or not editable';
+  end if;
+
+  select c.kind into target_conversation_kind
+  from public.conversations c
+  where c.id = target_message.conversation_id;
+
+  if not found or target_conversation_kind is distinct from 'global' then
     raise exception 'Message not found or not editable';
   end if;
 
@@ -115,18 +121,24 @@ begin
     raise exception 'An active signed-in account is required';
   end if;
 
-  select m, c.kind into target_message, target_conversation_kind
+  select m.* into target_message
   from public.messages m
-  join public.conversations c on c.id = m.conversation_id
   where m.id = p_message_id
-  for update of m;
+  for update;
 
   if not found
      or target_message.sender_id is distinct from auth.uid()
-     or target_conversation_kind <> 'global'
      or target_message.deleted_at is not null
      or target_message.moderation_status <> 'approved'
      or target_message.message_kind <> 'text' then
+    raise exception 'Message not found or not deletable';
+  end if;
+
+  select c.kind into target_conversation_kind
+  from public.conversations c
+  where c.id = target_message.conversation_id;
+
+  if not found or target_conversation_kind is distinct from 'global' then
     raise exception 'Message not found or not deletable';
   end if;
 

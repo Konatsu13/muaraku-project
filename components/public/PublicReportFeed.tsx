@@ -16,7 +16,8 @@ export interface PublicReportPreview {
   location_label: string | null;
   occurred_at: string | null;
   created_at: string;
-  category_name: string | null;
+  category_name_id: string | null;
+  category_name_en: string | null;
 }
 
 export function PublicReportFeed() {
@@ -113,6 +114,10 @@ export function PublicReportFeed() {
           }
         })();
         const place = [r.location_label, r.city].filter(Boolean).join(" · ");
+        const categoryName =
+          locale === "en"
+            ? r.category_name_en || r.category_name_id
+            : r.category_name_id || r.category_name_en;
 
         return (
           <article
@@ -136,7 +141,7 @@ export function PublicReportFeed() {
             </Link>
 
             <p className="text-xs text-secondary-text leading-relaxed">
-              {[place, r.category_name].filter(Boolean).join(" – ") || "—"}
+              {[place, categoryName].filter(Boolean).join(" – ") || "—"}
             </p>
           </article>
         );

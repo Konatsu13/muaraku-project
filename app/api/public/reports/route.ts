@@ -10,14 +10,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * and returns ONLY approved rows and public-safe columns — no private
  * details, no media paths, no reporter identity.
  */
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const admin = createAdminClient();
   if (!admin) {
     return NextResponse.json(
-      { error: "Public feed is not configured (missing SUPABASE_SECRET_KEY)." },
-      { status: 500 }
+      { error: "Feed laporan belum tersedia. Silakan coba lagi nanti." },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
     );
   }
 
@@ -32,7 +32,7 @@ export async function GET() {
       location_label,
       occurred_at,
       created_at,
-      report_categories:category_id ( name_id, name_en )
+      category:report_categories ( name_id, name_en )
     `
     )
     .eq("moderation_status", "approved")
@@ -40,13 +40,15 @@ export async function GET() {
     .limit(6);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Public reports feed query failed:", error);
+    return NextResponse.json(
+      { error: "Feed laporan gagal dimuat. Silakan coba lagi." },
+      { status: 500, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   const rows = (data || []).map((r) => {
-    const cat = Array.isArray(r.report_categories)
-      ? r.report_categories[0]
-      : r.report_categories;
+    const cat = Array.isArray(r.category) ? r.category[0] : r.category;
     return {
       id: r.id,
       report_type: r.report_type,
@@ -55,9 +57,13 @@ export async function GET() {
       location_label: r.location_label,
       occurred_at: r.occurred_at,
       created_at: r.created_at,
-      category_name: cat?.name_id ?? cat?.name_en ?? null,
+      category_name_id: cat?.name_id ?? null,
+      category_name_en: cat?.name_en ?? null,
     };
   });
 
-  return NextResponse.json({ data: rows });
+  return NextResponse.json(
+    { data: rows },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }

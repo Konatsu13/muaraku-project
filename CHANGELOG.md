@@ -1,5 +1,27 @@
 # CHANGELOG — MuaraKu
 
+## [Laporan publik landing dan SQL Preview] — 2026-10-25
+
+- Bagian laporan publik di landing dipindah tepat setelah hero agar mudah
+  ditemukan. Endpoint hanya mengambil laporan berstatus `approved`, memakai
+  relasi `reports -> report_categories` yang benar, mengirim nama kategori
+  sesuai bahasa, dan mengambil data saat request tanpa cache.
+- Pesan error API dibuat aman untuk pengunjung; detail Supabase tetap tercatat
+  di server log. Tombol utama memakai teks gelap agar kontras pada warna orange
+  memenuhi aksesibilitas.
+- Fungsi edit/hapus Global Chat di migration dan installer mengambil row pesan
+  serta jenis percakapan lewat query terpisah, memperbaiki Preview PostgreSQL:
+  `record variable cannot be part of multiple-item INTO list`.
+- `SUPABASE_SECRET_KEY` di `.env.local` ternyata berbeda dari key valid di file
+  lokal bernama `.env .local` (dengan spasi). Nilai yang valid disalin ke
+  `.env.local` yang diabaikan Git, tanpa menampilkan atau menambahkan secret ke
+  source control. Endpoint produksi kini HTTP 200 dan mengembalikan 6 laporan
+  approved dari database.
+- Build, TypeScript, lint, dan Taste Skill lulus. Inspector landing production
+  pada 1440/768/390 px: 0 FAIL, 3 WARN (void hero, ukuran judul yang salah
+  diklasifikasikan sebagai app screen, dan margin teks mobile). Tidak ada SQL
+  yang dijalankan atau deploy.
+
 ## [Phase 5–6: Admin, Support, Muara AI, dan kesiapan rilis] — 2026-10-25
 
 Scope: menyelesaikan alur Admin/Support/Muara AI yang didukung kode dan schema
