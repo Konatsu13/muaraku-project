@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/components/providers/AppProviders";
+import { getSiteUrl } from "@/lib/config/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,6 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getSiteUrl() || "https://muaraku.id"),
   title: "MuaraKu — Titik Temu Bagi yang Terpisah",
   description: "Platform lost and found komunitas dan kampus terpercaya di Indonesia.",
   icons: {
@@ -39,7 +41,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col text-zinc-900 dark:text-zinc-100 bg-[#FFFCF8] dark:bg-[#18181B] selection:bg-orange-500/20 selection:text-orange-600">
+      <body className="min-h-full flex flex-col bg-canvas dark:bg-[#18181B] selection:bg-orange-500/20 selection:text-orange-600">
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

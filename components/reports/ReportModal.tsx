@@ -9,8 +9,11 @@ import {
   AlertCircle,
   Loader2,
   CheckCircle2,
+  Check,
   PackageSearch,
   PackageCheck,
+  ChevronDown,
+  Trash2,
 } from "lucide-react";
 import {
   createReport,
@@ -21,12 +24,24 @@ import {
   CreateReportInput,
 } from "@/lib/supabase/reports";
 import { buildOccurredAt, splitOccurredAt } from "@/lib/reports/occurred-at";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_FILE_SIZE = 8 * 1024 * 1024;
+const MAX_FILE_SIZE = 8 * 1024 * 1024; // 8MB
 
 type FieldErrors = Partial<
-  Record<"title" | "category_id" | "occurred_date" | "location_label" | "city" | "description", string>
+  Record<
+    | "title"
+    | "category_id"
+    | "occurred_date"
+    | "occurred_time"
+    | "location_label"
+    | "city"
+    | "description"
+    | string,
+    string
+  >
 >;
 
 interface ReportModalProps {
@@ -37,23 +52,27 @@ interface ReportModalProps {
   onSuccess?: (report: ReportDetailItem) => void;
 }
 
-export function ReportModal({
-  isOpen,
+function ReportModalInner({
   onClose,
   defaultType = "lost",
   editReport,
   onSuccess,
-}: ReportModalProps) {
+}: Omit<ReportModalProps, "isOpen">) {
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // `report_type` is fixed by the page context (or the report being edited).
-  // It is never user-switchable inside the form.
+  // `report_type` is fixed by context/page; cannot be arbitrarily changed
   const reportType: "lost" | "found" = editReport ? editReport.report_type : defaultType;
 
   const [categories, setCategories] = useState<ReportCategory[]>([]);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
+  // Expandable optional sections (progressive disclosure)
+  const [showOptionalFields, setShowOptionalFields] = useState(false);
+  const [showPrivateClues, setShowPrivateClues] = useState(false);
+  const [showContactOptions, setShowContactOptions] = useState(false);
+
+  // --- Required fields (Section 1 & 2 & 3) ---
   const [title, setTitle] = useState(editReport?.title || "");
   const [description, setDescription] = useState(editReport?.description || "");
   const [categoryId, setCategoryId] = useState<string>(editReport?.category_id || "");
@@ -67,11 +86,21 @@ export function ReportModal({
 
   const [locationLabel, setLocationLabel] = useState(editReport?.location_label || "");
   const [city, setCity] = useState(editReport?.city || "");
+
+  // --- Optional fields (Section 1 extended) ---
   const [color, setColor] = useState(editReport?.color || "");
   const [brand, setBrand] = useState(editReport?.brand || "");
   const [model, setModel] = useState(editReport?.model || "");
 
-  // Private details
+  // --- File uploads ---
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [removedMediaIds, setRemovedMediaIds] = useState<string[]>([]);
+  const keptExistingMedia = (editReport?.media || []).filter(
+    (m) => !removedMediaIds.includes(m.id)
+  );
+
+  // --- Private verification clues (Section 4) ---
   const [ownerOnlyClues, setOwnerOnlyClues] = useState(
     editReport?.private_details?.owner_only_clues || ""
   );
@@ -82,38 +111,35 @@ export function ReportModal({
     editReport?.private_details?.contact_preference || "in_app"
   );
 
-  // File uploads
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
-
+  // --- UI state ---
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  // Load categories when modal is opened
+  // Load categories
   useEffect(() => {
-    if (!isOpen) return;
     let mounted = true;
     fetchCategories().then((res) => {
       if (!mounted) return;
       if (res.error) {
         setCategoriesError(res.error.message);
-        return;
+      } else {
+        setCategories(res.data || []);
       }
-      setCategories(res.data || []);
     });
+
     return () => {
       mounted = false;
     };
-  }, [isOpen]);
+  }, []);
 
+  // Object URL cleanup
   const previewUrlsRef = useRef<string[]>([]);
   useEffect(() => {
     previewUrlsRef.current = previewUrls;
   }, [previewUrls]);
 
-  // Cleanup object URLs on unmount to prevent browser memory leaks
   useEffect(() => {
     return () => {
       previewUrlsRef.current.forEach((url) => {
@@ -127,26 +153,6 @@ export function ReportModal({
     };
   }, []);
 
-  // Sync editReport state if provided
-  useEffect(() => {
-    if (editReport) {
-      setTitle(editReport.title);
-      setDescription(editReport.description);
-      setCategoryId(editReport.category_id || "");
-      setLocationLabel(editReport.location_label || "");
-      setCity(editReport.city || "");
-      const parts = splitOccurredAt(editReport.occurred_at, editReport.item_attributes);
-      setOccurredDate(parts.date);
-      setOccurredTime(parts.time);
-      setColor(editReport.color || "");
-      setBrand(editReport.brand || "");
-      setModel(editReport.model || "");
-      setOwnerOnlyClues(editReport.private_details?.owner_only_clues || "");
-      setPrivateContact(editReport.private_details?.private_contact || "");
-      setContactPreference(editReport.private_details?.contact_preference || "in_app");
-    }
-  }, [editReport]);
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
@@ -155,12 +161,12 @@ export function ReportModal({
     const validFiles: File[] = [];
     for (const f of files) {
       if (!ALLOWED_IMAGE_TYPES.includes(f.type)) {
-        setErrorMsg(`Berkas "${f.name}" harus berformat JPG, PNG, atau WEBP.`);
+        setErrorMsg(`Format berkas "${f.name}" tidak didukung. Harap gunakan format JPG, PNG, atau WEBP.`);
         e.target.value = "";
         return;
       }
       if (f.size > MAX_FILE_SIZE) {
-        setErrorMsg(`Berkas "${f.name}" melebihi ukuran batas 8MB.`);
+        setErrorMsg(`Ukuran berkas "${f.name}" melebihi batas maksimal 8MB.`);
         e.target.value = "";
         return;
       }
@@ -181,16 +187,21 @@ export function ReportModal({
     });
   };
 
-  const validate = (): FieldErrors => {
+  const handleRemoveKeptMedia = (mediaId: string) => {
+    setRemovedMediaIds((prev) => [...prev, mediaId]);
+  };
+
+  // Validate all required fields (single-page form)
+  const validateForm = (): boolean => {
     const errors: FieldErrors = {};
     const trimmedTitle = title.trim();
     const trimmedDesc = description.trim();
 
     if (trimmedTitle.length < 3 || trimmedTitle.length > 140) {
-      errors.title = "Judul harus antara 3 dan 140 karakter.";
+      errors.title = "Nama / judul barang wajib antara 3 dan 140 karakter.";
     }
     if (!categoryId) {
-      errors.category_id = "Pilih kategori barang.";
+      errors.category_id = "Kategori barang wajib dipilih.";
     }
     if (!occurredDate) {
       errors.occurred_date = "Tanggal kejadian wajib diisi.";
@@ -201,15 +212,16 @@ export function ReportModal({
       errors.location_label = "Lokasi maksimal 200 karakter.";
     }
     if (!city.trim()) {
-      errors.city = "Kota wajib diisi.";
+      errors.city = "Kota kejadian wajib diisi.";
     } else if (city.trim().length > 100) {
-      errors.city = "Kota maksimal 100 karakter.";
+      errors.city = "Nama kota maksimal 100 karakter.";
     }
     if (trimmedDesc.length < 5 || trimmedDesc.length > 5000) {
-      errors.description = "Deskripsi harus antara 5 dan 5000 karakter.";
+      errors.description = "Deskripsi publik wajib antara 5 dan 5000 karakter.";
     }
 
-    return errors;
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -222,10 +234,8 @@ export function ReportModal({
       return;
     }
 
-    const errors = validate();
-    setFieldErrors(errors);
-    if (Object.keys(errors).length > 0) {
-      setErrorMsg("Periksa kembali kolom yang ditandai sebelum melanjutkan.");
+    if (!validateForm()) {
+      setErrorMsg("Harap periksa kembali kolom wajib yang ditandai tanda bintang (*).");
       return;
     }
 
@@ -236,8 +246,6 @@ export function ReportModal({
       return;
     }
 
-    // Preserve any unrelated item attributes already stored on the report and
-    // only overwrite the occurrence-precision marker.
     const itemAttributes: Record<string, unknown> = {
       ...(editReport?.item_attributes || {}),
       ...occurred.attributes,
@@ -247,7 +255,6 @@ export function ReportModal({
 
     try {
       if (editReport) {
-        // UPDATE existing report
         const res = await updateReport(
           editReport.id,
           {
@@ -266,11 +273,17 @@ export function ReportModal({
             owner_only_clues: ownerOnlyClues.trim() || null,
             private_contact: privateContact.trim() || null,
             contact_preference: contactPreference,
-          }
+          },
+          selectedFiles.length > 0 || removedMediaIds.length > 0
+            ? {
+                filesToAdd: selectedFiles,
+                mediaIdsToRemove: removedMediaIds,
+              }
+            : undefined
         );
 
         if (!res.success || res.error) {
-          throw new Error(res.error?.message || "Gagal memperbarui laporan");
+          throw new Error(res.error?.message || "Gagal memperbarui laporan.");
         }
 
         setSuccessMsg("Laporan berhasil diperbarui.");
@@ -290,7 +303,6 @@ export function ReportModal({
           });
         }
       } else {
-        // CREATE new report
         const input: CreateReportInput = {
           report_type: reportType,
           title: title.trim(),
@@ -311,7 +323,7 @@ export function ReportModal({
         const res = await createReport(input, selectedFiles);
 
         if (res.error || !res.data) {
-          throw new Error(res.error?.message || "Gagal membuat laporan");
+          throw new Error(res.error?.message || "Gagal membuat laporan.");
         }
 
         setSuccessMsg("Laporan berhasil dibuat dan sedang menunggu peninjauan moderator.");
@@ -322,166 +334,282 @@ export function ReportModal({
 
       setTimeout(() => {
         onClose();
-      }, 1000);
+      }, 1200);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat memproses laporan";
+      const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat menyimpan laporan.";
       setErrorMsg(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  if (!isOpen) return null;
-
   const inputClass = (hasError: boolean) =>
-    `w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 ${
+    `w-full px-3.5 py-2.5 bg-surface dark:bg-zinc-900 border rounded-lg text-xs sm:text-sm text-main-text dark:text-zinc-100 placeholder-secondary-text focus:outline-hidden focus:ring-2 focus:ring-brand focus:border-brand transition-colors ${
       hasError
-        ? "border-rose-400 dark:border-rose-700"
-        : "border-zinc-200 dark:border-zinc-800"
+        ? "border-error dark:border-error bg-error/10"
+        : "border-subtle dark:border-zinc-800"
     }`;
 
-  const fieldError = (key: keyof FieldErrors) =>
+  const renderFieldError = (key: keyof FieldErrors) =>
     fieldErrors[key] ? (
-      <span className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 block">
+      <span className="text-[11px] font-medium text-error dark:text-error mt-1 block">
         {fieldErrors[key]}
       </span>
     ) : null;
 
+  const requiredLabel = (label: React.ReactNode) => (
+    <span className="flex items-center gap-1">
+      {label}
+      <span className="text-error font-bold text-xs">*</span>
+    </span>
+  );
+
+  const optionalLabel = (label: React.ReactNode) => (
+    <span className="flex items-center gap-1">
+      {label}
+      <span className="text-secondary-text text-xs font-normal">(opsional)</span>
+    </span>
+  );
+
+  const sectionTitle = (title: string, subtitle?: string) => (
+    <div className="mb-4">
+      <h3 className="text-base font-bold text-main-text mb-1">{title}</h3>
+      {subtitle && <p className="text-xs text-secondary-text leading-relaxed">{subtitle}</p>}
+    </div>
+  );
+
+  const isLost = reportType === "lost";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-xs animate-fade-in">
-      <div className="bg-white dark:bg-[#121214] w-full max-w-2xl rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xl flex flex-col max-h-[90vh] overflow-hidden">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="report-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-xs animate-fade-in"
+    >
+      <div
+        className="bg-surface dark:bg-[#121214] w-full max-w-2xl rounded-xl border border-subtle dark:border-zinc-800 shadow-xl flex flex-col max-h-[92vh] overflow-hidden"
+      >
         {/* Modal Header */}
-        <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-              {editReport
-                ? "Edit Laporan"
-                : reportType === "lost"
-                ? "Buat Laporan Kehilangan"
-                : "Buat Laporan Temuan"}
-            </h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              {editReport
-                ? "Perbarui rincian informasi laporan barang Anda"
-                : "Isi data dengan akurat agar mempercepat proses verifikasi temu kembali"}
-            </p>
+        <div className="px-6 py-4 border-b border-subtle dark:border-zinc-800/80 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+              isLost ? "bg-rose-500/10 text-rose-600 dark:text-rose-400" : "bg-trust/10 text-trust dark:text-trust"
+            }`}>
+              {isLost ? (
+                <PackageSearch className="w-5 h-5" />
+              ) : (
+                <PackageCheck className="w-5 h-5" />
+              )}
+            </div>
+            <div>
+              <h2
+                id="report-modal-title"
+                className="text-base sm:text-lg font-bold text-main-text"
+              >
+                {editReport
+                  ? "Edit Laporan Barang"
+                  : reportType === "lost"
+                    ? "Laporkan Barang Hilang"
+                    : "Laporkan Barang Ditemukan"}
+              </h2>
+              <p className="text-xs text-secondary-text">
+                {reportType === "lost"
+                  ? "Jelaskan barang yang kamu cari agar komunitas bisa membantu menemukannya."
+                  : "Jelaskan barang yang kamu temukan agar pemiliknya dapat mengklaimnya."}
+              </p>
+            </div>
           </div>
 
           <button
             onClick={onClose}
-            aria-label="Tutup modal"
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            aria-label="Tutup form"
+            className="p-2 rounded-lg text-secondary-text hover:text-main-text dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+        {/* Modal Form Body */}
+        <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto p-6 space-y-6">
           {errorMsg && (
-            <div className="p-3.5 rounded-xl text-xs bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 flex items-start gap-2">
+            <div className="p-3.5 rounded-xl text-xs bg-error/10 dark:bg-error/20 text-error dark:text-error border border-error/30 dark:border-error/40 flex items-start gap-2 animate-fade-in">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="p-3.5 rounded-xl text-xs bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 flex items-start gap-2">
+            <div className="p-3.5 rounded-xl text-xs bg-success/10 dark:bg-success/20 text-success dark:text-success border border-success/30 dark:border-success/40 flex items-start gap-2 animate-fade-in">
               <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>{successMsg}</span>
             </div>
           )}
 
-          {/* Fixed report type indicator */}
-          <div className="flex items-center gap-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3 py-2.5">
-            {reportType === "lost" ? (
-              <PackageSearch className="w-4 h-4 text-rose-500 flex-shrink-0" />
-            ) : (
-              <PackageCheck className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+          {/* ================= SECTION 1: CERITAKAN BARANG ================= */}
+          <div className="space-y-4 animate-fade-in">
+            {sectionTitle(
+              "Ceritakan barangmu",
+              "Masukkan informasi dasar agar orang lain dapat mengenali barang ini."
             )}
-            <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
-              Jenis laporan:{" "}
-              <strong className="text-zinc-900 dark:text-zinc-100">
-                {reportType === "lost" ? "Barang Hilang" : "Barang Ditemukan"}
-              </strong>
-              . Jenis ditentukan oleh halaman tempat laporan dibuat.
-            </p>
-          </div>
 
-          {/* Title */}
-          <div>
-            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-              Judul Barang <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              minLength={3}
-              maxLength={140}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Contoh: Dompet Kulit Coklat merk Bifold"
-              aria-invalid={Boolean(fieldErrors.title)}
-              className={inputClass(Boolean(fieldErrors.title))}
-            />
-            {fieldError("title") || (
-              <span className="text-[10px] text-zinc-400 mt-1 block">3 - 140 karakter</span>
-            )}
-          </div>
-
-          {/* Category & Occurred At Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Kategori <span className="text-rose-500">*</span>
-              </label>
-              <select
+            {/* Title */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-main-text">{requiredLabel("Nama / Judul Barang")}</label>
+              <input
+                type="text"
                 required
+                autoFocus
+                minLength={3}
+                maxLength={140}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Contoh: Dompet kulit cokelat"
+                className={inputClass(!!fieldErrors.title)}
+                aria-invalid={!!fieldErrors.title}
+                aria-errormessage={fieldErrors.title ? "title-error" : undefined}
+              />
+              {renderFieldError("title")}
+            </div>
+
+            {/* Category */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-main-text">{requiredLabel("Kategori")}</label>
+              <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                aria-invalid={Boolean(fieldErrors.category_id)}
-                className={inputClass(Boolean(fieldErrors.category_id))}
+                className={inputClass(!!fieldErrors.category_id)}
+                aria-invalid={!!fieldErrors.category_id}
               >
-                <option value="">Pilih Kategori</option>
+                <option value="">Pilih kategori barang</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name_id}
                   </option>
                 ))}
               </select>
-              {fieldError("category_id")}
-              {categoriesError && (
-                <span className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 block">
-                  Gagal memuat kategori: {categoriesError}
-                </span>
-              )}
-              {!categoriesError && categories.length === 0 && (
-                <span className="text-[10px] text-zinc-400 mt-1 block">
-                  Daftar kategori belum tersedia.
-                </span>
-              )}
+              {renderFieldError("category_id")}
             </div>
 
+            {/* Optional: Color, Brand, Model in one row */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-main-text">{optionalLabel("Warna")}</label>
+                <input
+                  type="text"
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                  placeholder="Contoh: cokelat, hitam, biru"
+                  className={inputClass(false)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-main-text">{optionalLabel("Merek")}</label>
+                <input
+                  type="text"
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                  placeholder="Contoh: Samsonite"
+                  className={inputClass(false)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-main-text">{optionalLabel("Model / Ciri Khusus")}</label>
+                <input
+                  type="text"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder="Contoh: Vario 150, iPhone 13"
+                  className={inputClass(false)}
+                />
+              </div>
+            </div>
+
+            {/* Photo upload */}
             <div className="space-y-2">
-              <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  Tanggal Kejadian <span className="text-rose-500">*</span>
+              <label className="block text-xs font-semibold text-main-text">{optionalLabel("Foto Barang")}</label>
+              <p className="text-[11px] text-secondary-text">
+                Foto membantu orang mengenali barang. Ambil foto jelas dari beberapa sudut. Maksimal 8MB per berkas (JPG, PNG, WEBP).
+              </p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {selectedFiles.map((file, index) => (
+                  <div key={index} className="relative aspect-square rounded-lg overflow-hidden border border-subtle">
+                    <img
+                      src={previewUrls[index]}
+                      alt={file.name}
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile(index)}
+                      aria-label={`Hapus foto ${file.name}`}
+                      className="absolute top-1 right-1 bg-black/60 text-white rounded-lg p-1 hover:bg-black/80 transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                {keptExistingMedia.map((media) => (
+                  <div key={media.id} className="relative aspect-square rounded-lg overflow-hidden border border-subtle bg-zinc-100 dark:bg-zinc-800">
+                    <span className="absolute inset-0 flex items-center justify-center text-zinc-500 dark:text-zinc-400 text-[10px]">
+                      Foto tersimpan
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveKeptMedia(media.id)}
+                      aria-label="Hapus foto tersimpan"
+                      className="absolute top-1 right-1 bg-black/60 text-white rounded-lg p-1 hover:bg-black/80 transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                <label className="aspect-square rounded-lg border border-dashed border-subtle bg-zinc-50/50 dark:bg-zinc-800/50 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                  <Upload className="w-5 h-5 text-secondary-text" />
+                  <span className="text-[10px] font-medium text-secondary-text">Tambah Foto</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="sr-only"
+                    aria-label="Pilih foto barang"
+                  />
                 </label>
+              </div>
+              {selectedFiles.length + keptExistingMedia.length > 0 && (
+                <p className="text-[11px] text-secondary-text mt-1">
+                  {selectedFiles.length} foto baru, {keptExistingMedia.length} foto tersimpan.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* ================= SECTION 2: WAKTU & LOKASI ================= */}
+          <div className="space-y-4 animate-fade-in">
+            {sectionTitle(
+              "Di mana dan kapan?",
+              "Lokasi yang spesifik membantu orang lain mengenali tempat kejadian barang."
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-main-text">{requiredLabel("Tanggal Kejadian")}</label>
                 <input
                   type="date"
                   required
                   value={occurredDate}
-                  max={new Date().toISOString().slice(0, 10)}
                   onChange={(e) => setOccurredDate(e.target.value)}
-                  aria-invalid={Boolean(fieldErrors.occurred_date)}
-                  className={inputClass(Boolean(fieldErrors.occurred_date))}
+                  className={inputClass(!!fieldErrors.occurred_date)}
+                  aria-invalid={!!fieldErrors.occurred_date}
                 />
-                {fieldError("occurred_date")}
+                {renderFieldError("occurred_date")}
               </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  Waktu <span className="text-zinc-400 font-normal">(opsional)</span>
-                </label>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-main-text">{optionalLabel("Waktu Kejadian")}</label>
                 <input
                   type="time"
                   value={occurredTime}
@@ -490,31 +618,24 @@ export function ReportModal({
                 />
               </div>
             </div>
-          </div>
 
-          {/* Location & City Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Lokasi Spesifik / Tempat <span className="text-rose-500">*</span>
-              </label>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-main-text">{requiredLabel("Lokasi Spesifik")}</label>
               <input
                 type="text"
                 required
                 maxLength={200}
                 value={locationLabel}
                 onChange={(e) => setLocationLabel(e.target.value)}
-                placeholder="Contoh: Stasiun Gambir Gate 2"
-                aria-invalid={Boolean(fieldErrors.location_label)}
-                className={inputClass(Boolean(fieldErrors.location_label))}
+                placeholder="Contoh: Stasiun Gambir, dekat Gate 2"
+                className={inputClass(!!fieldErrors.location_label)}
+                aria-invalid={!!fieldErrors.location_label}
               />
-              {fieldError("location_label")}
+              {renderFieldError("location_label")}
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Kota <span className="text-rose-500">*</span>
-              </label>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-main-text">{requiredLabel("Kota")}</label>
               <input
                 type="text"
                 required
@@ -522,204 +643,157 @@ export function ReportModal({
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
                 placeholder="Contoh: Jakarta Pusat"
-                aria-invalid={Boolean(fieldErrors.city)}
-                className={inputClass(Boolean(fieldErrors.city))}
+                className={inputClass(!!fieldErrors.city)}
+                aria-invalid={!!fieldErrors.city}
               />
-              {fieldError("city")}
+              {renderFieldError("city")}
             </div>
           </div>
 
-          {/* Color, Brand, Model Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Warna <span className="text-zinc-400 font-normal">(opsional)</span>
-              </label>
-              <input
-                type="text"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                placeholder="Misal: Cokelat tua"
-                className={inputClass(false)}
+          {/* ================= SECTION 3: DESKRIPSI PUBLIK ================= */}
+          <div className="space-y-4 animate-fade-in">
+            {sectionTitle(
+              "Bantu orang mengenalinya",
+              "Ceritakan ciri yang terlihat oleh orang lain. Simpan detail rahasia untuk verifikasi pemilik di bagian berikutnya."
+            )}
+
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-main-text">{requiredLabel("Deskripsi Publik")}</label>
+              <textarea
+                required
+                minLength={5}
+                maxLength={5000}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={5}
+                placeholder="Contoh: Dompet kulit cokelat dengan beberapa kartu di dalamnya. Terakhir terlihat di sekitar stasiun."
+                className={inputClass(!!fieldErrors.description)}
+                aria-invalid={!!fieldErrors.description}
               />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Merek / Brand <span className="text-zinc-400 font-normal">(opsional)</span>
-              </label>
-              <input
-                type="text"
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
-                placeholder="Misal: Fossil"
-                className={inputClass(false)}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Model / Seri <span className="text-zinc-400 font-normal">(opsional)</span>
-              </label>
-              <input
-                type="text"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="Misal: Derrick RFID"
-                className={inputClass(false)}
-              />
+              {renderFieldError("description")}
             </div>
           </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-              Deskripsi Publik <span className="text-rose-500">*</span>
-            </label>
-            <textarea
-              required
-              rows={3}
-              minLength={5}
-              maxLength={5000}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Jelaskan ciri umum barang yang dapat dilihat oleh publik..."
-              aria-invalid={Boolean(fieldErrors.description)}
-              className={inputClass(Boolean(fieldErrors.description))}
-            />
-            {fieldError("description") || (
-              <span className="text-[10px] text-zinc-400 mt-1 block">
-                Jangan tulis ciri rahasia atau kontak pribadi di sini.
+          {/* ================= SECTION 4: PETUNJUK PRIBADI (COLLAPSIBLE) ================= */}
+          <div className="animate-fade-in">
+            <button
+              type="button"
+              onClick={() => setShowPrivateClues(!showPrivateClues)}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-subtle bg-zinc-50/50 dark:bg-zinc-800/50 text-xs font-semibold text-main-text hover:bg-surface transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <Lock className="w-4 h-4" />
+                Petunjuk Pribadi untuk Verifikasi
               </span>
+              <ChevronDown
+                className={`w-4 h-4 transition-transform ${showPrivateClues ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            {showPrivateClues && (
+              <div className="mt-3 space-y-3 rounded-lg border border-subtle bg-zinc-50/50 dark:bg-zinc-800/50 p-4">
+                <p className="text-xs text-secondary-text leading-relaxed mb-3">
+                  Tambahkan ciri yang hanya diketahui pemilik asli. Informasi ini <b className="text-main-text">tidak ditampilkan pada laporan publik</b> dan dapat membantu proses verifikasi klaim.
+                </p>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-main-text">{optionalLabel("Ciri yang Tidak Dipublikasikan")}</label>
+                  <textarea
+                    value={ownerOnlyClues}
+                    onChange={(e) => setOwnerOnlyClues(e.target.value)}
+                    rows={3}
+                    placeholder="Contoh: Detail pada bagian belakang barang yang tidak terlihat di foto."
+                    className="w-full px-3.5 py-2.5 bg-surface dark:bg-zinc-900 border rounded-lg text-xs sm:text-sm text-main-text dark:text-zinc-100 placeholder-secondary-text focus:outline-hidden focus:ring-2 focus:ring-brand transition-colors"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-main-text">{optionalLabel("Kontak Tambahan")}</label>
+                  <input
+                    type="text"
+                    value={privateContact}
+                    onChange={(e) => setPrivateContact(e.target.value)}
+                    maxLength={250}
+                    placeholder="Contoh: kontak melalui MuaraKu chat saja"
+                    className="w-full px-3.5 py-2.5 bg-surface dark:bg-zinc-900 border rounded-lg text-xs sm:text-sm text-main-text dark:text-zinc-100 placeholder-secondary-text focus:outline-hidden focus:ring-2 focus:ring-brand transition-colors"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-main-text">{optionalLabel("Preferensi Kontak")}</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(["in_app", "email", "other"] as const).map((val) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setContactPreference(val)}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
+                          contactPreference === val
+                            ? "bg-brand text-orange-900 border-brand"
+                            : "bg-surface text-main-text border-subtle hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        }`}
+                      >
+                        {val === "in_app" ? "Chat MuaraKu" : val === "email" ? "Email" : "Lainnya"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Photo Upload Area */}
-          {!editReport && (
-            <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Foto Barang <span className="text-zinc-400 font-normal">(opsional, maks. 8MB/foto)</span>
-              </label>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept="image/jpeg,image/png,image/webp"
-                multiple
-                className="hidden"
-              />
-
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-zinc-50/50 dark:bg-zinc-900/50"
-              >
-                <Upload className="w-5 h-5 text-zinc-400 mb-1.5" />
-                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                  Pilih foto dari perangkat
-                </span>
-                <span className="text-[10px] text-zinc-400 mt-0.5">
-                  Format JPG, PNG, atau WEBP. Disimpan di bucket privat terenkripsi.
-                </span>
-              </div>
-
-              {previewUrls.length > 0 && (
-                <div className="grid grid-cols-4 gap-2 mt-3">
-                  {previewUrls.map((url, idx) => (
-                    <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800">
-                      <img src={url} alt="" className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveFile(idx)}
-                        className="absolute top-1 right-1 p-1 bg-black/70 hover:bg-black text-white rounded-md text-[10px]"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Private Verification Clues Section */}
-          <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/80">
-            <div className="flex items-center gap-2 mb-2">
-              <Lock className="w-3.5 h-3.5 text-orange-500" />
-              <h3 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                Ciri Rahasia &amp; Privasi Pemilik
-              </h3>
-            </div>
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-3 leading-relaxed">
-              Informasi di bawah ini hanya dapat dilihat oleh Anda dan moderator saat proses klaim. Informasi ini <strong>tidak akan</strong> muncul pada feed atau pencarian publik.
-            </p>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  Ciri Rahasia Khusus (Owner Clues)
-                </label>
-                <textarea
-                  rows={2}
-                  maxLength={2000}
-                  value={ownerOnlyClues}
-                  onChange={(e) => setOwnerOnlyClues(e.target.value)}
-                  placeholder="Misal: Nomor seri tersembunyi, foto di balik case, goresan di sudut kiri..."
-                  className={inputClass(false)}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                    Preferensi Kontak
-                  </label>
-                  <select
-                    value={contactPreference}
-                    onChange={(e) => setContactPreference(e.target.value as "in_app" | "email" | "other")}
-                    className={inputClass(false)}
-                  >
-                    <option value="in_app">Melalui Pesan Aplikasi (MuaraKu Chat)</option>
-                    <option value="email">Melalui Email</option>
-                    <option value="other">Kontak Lain</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                    Kontak Tambahan (Privat)
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={250}
-                    value={privateContact}
-                    onChange={(e) => setPrivateContact(e.target.value)}
-                    placeholder="Misal: nomor WhatsApp atau Telegram"
-                    className={inputClass(false)}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Modal Footer Controls */}
-          <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-end gap-2.5">
-            <button
+          {/* Submit Footer */}
+          <div className="mt-2 flex items-center justify-end gap-2 pt-4 border-t border-subtle dark:border-zinc-800">
+            <Button
               type="button"
+              variant="ghost"
+              size="md"
               onClick={onClose}
-              disabled={loading}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="px-4"
             >
               Batal
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
+              variant="primary"
+              size="md"
               disabled={loading}
-              className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white disabled:opacity-50 flex items-center gap-1.5 transition-colors shadow-xs"
+              className="px-6"
             >
-              {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              <span>{editReport ? "Simpan Perubahan" : "Terbitkan Laporan"}</span>
-            </button>
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Mengirim...
+                </>
+              ) : (
+                "Publikasikan Laporan"
+              )}
+            </Button>
           </div>
         </form>
       </div>
     </div>
   );
 }
+
+export function ReportModal({
+  isOpen,
+  onClose,
+  defaultType,
+  editReport,
+  onSuccess,
+}: ReportModalProps) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" aria-hidden="true">
+      <ReportModalInner
+        onClose={onClose}
+        defaultType={defaultType}
+        editReport={editReport}
+        onSuccess={onSuccess}
+      />
+    </div>
+  );
+}
+
+ReportModal.displayName = "ReportModal";

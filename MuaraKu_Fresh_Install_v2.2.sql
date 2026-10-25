@@ -1056,6 +1056,9 @@ drop policy if exists reports_update_own_editable on public.reports;
 create policy reports_update_own_editable on public.reports for update to authenticated
 using (reporter_user_id = auth.uid() and case_status in ('open','match_pending') and moderation_status <> 'removed')
 with check (reporter_user_id = auth.uid() and case_status in ('open','match_pending') and moderation_status <> 'removed');
+drop policy if exists reports_delete_own_editable on public.reports;
+create policy reports_delete_own_editable on public.reports for delete to authenticated
+using (reporter_user_id = auth.uid() and case_status in ('open','match_pending') and moderation_status <> 'removed');
 drop policy if exists reports_staff_update on public.reports;
 create policy reports_staff_update on public.reports for update to authenticated
 using (public.muaraku_has_staff_role('admin') or public.muaraku_has_staff_role('moderator'))
@@ -1373,6 +1376,134 @@ grant select on public.audit_logs to authenticated;
 -- code paths. Keep this key in server-only environment variables; never in NEXT_PUBLIC_*.
 grant all on public.user_profiles, public.user_account_controls, public.staff_roles, public.report_categories, public.locations, public.reports, public.report_private_details, public.report_media, public.report_matches, public.claims, public.claim_evidence, public.saved_reports, public.conversations, public.conversation_members, public.messages, public.user_blocks, public.notifications, public.notification_preferences, public.safety_reports, public.moderation_actions, public.moderation_appeals, public.location_staff_verifications, public.support_tickets, public.support_ticket_messages, public.report_translations, public.muara_ai_sessions, public.muara_ai_messages, public.terms_acceptances, public.audit_logs to service_role;
 
+create or replace function public.muaraku_set_owned_report_status(
+  p_report_id uuid,
+  p_case_status text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  target_report public.reports%rowtype;
+begin
+  if auth.uid() is null or not public.muaraku_is_current_user_active() then
+    raise exception 'An active signed-in account is required';
+  end if;
+
+  if p_case_status not in ('open', 'returned') then
+    raise exception 'Unsupported report status';
+  end if;
+
+  select * into target_report
+  from public.reports
+  where id = p_report_id
+  for update;
+
+  if not found
+     or target_report.reporter_user_id is distinct from auth.uid()
+     or target_report.moderation_status = 'removed' then
+    raise exception 'Report not found or not editable';
+  end if;
+
+  if p_case_status = 'returned'
+     and target_report.case_status not in ('open', 'match_pending') then
+    raise exception 'Report cannot be marked returned from its current status';
+  end if;
+
+  if p_case_status = 'open'
+     and target_report.case_status <> 'returned' then
+    raise exception 'Only returned reports can be reopened';
+  end if;
+
+  update public.reports
+  set case_status = p_case_status,
+      returned_at = case when p_case_status = 'returned' then now() else null end
+  where id = p_report_id;
+end;
+$$;
+
+create or replace function public.muaraku_edit_global_message(
+  p_message_id uuid,
+  p_body text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  target_message public.messages%rowtype;
+  target_conversation_kind text;
+  trimmed_body text := trim(coalesce(p_body, ''));
+begin
+  if auth.uid() is null or not public.muaraku_is_current_user_active() then
+    raise exception 'An active signed-in account is required';
+  end if;
+
+  if char_length(trimmed_body) not between 1 and 5000 then
+    raise exception 'Message must be between 1 and 5000 characters';
+  end if;
+
+  select m, c.kind into target_message, target_conversation_kind
+  from public.messages m
+  join public.conversations c on c.id = m.conversation_id
+  where m.id = p_message_id
+  for update of m;
+
+  if not found
+     or target_message.sender_id is distinct from auth.uid()
+     or target_conversation_kind <> 'global'
+     or target_message.deleted_at is not null
+     or target_message.moderation_status <> 'approved'
+     or target_message.message_kind <> 'text' then
+    raise exception 'Message not found or not editable';
+  end if;
+
+  update public.messages
+  set body = trimmed_body,
+      edited_at = now()
+  where id = p_message_id;
+end;
+$$;
+
+create or replace function public.muaraku_delete_global_message(p_message_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  target_message public.messages%rowtype;
+  target_conversation_kind text;
+begin
+  if auth.uid() is null or not public.muaraku_is_current_user_active() then
+    raise exception 'An active signed-in account is required';
+  end if;
+
+  select m, c.kind into target_message, target_conversation_kind
+  from public.messages m
+  join public.conversations c on c.id = m.conversation_id
+  where m.id = p_message_id
+  for update of m;
+
+  if not found
+     or target_message.sender_id is distinct from auth.uid()
+     or target_conversation_kind <> 'global'
+     or target_message.deleted_at is not null
+     or target_message.moderation_status <> 'approved'
+     or target_message.message_kind <> 'text' then
+    raise exception 'Message not found or not deletable';
+  end if;
+
+  update public.messages
+  set body = 'Pesan ini telah dihapus.',
+      deleted_at = now()
+  where id = p_message_id;
+end;
+$$;
+
 -- Functions callable by authenticated app users. Trigger functions are not RPC APIs.
 revoke all on function public.muaraku_has_staff_role(text) from public, anon;
 revoke all on function public.muaraku_is_active_user(uuid) from public, anon, authenticated;
@@ -1385,6 +1516,9 @@ revoke all on function public.muaraku_can_send_message(uuid) from public, anon;
 revoke all on function public.muaraku_can_view_claim(uuid) from public, anon;
 revoke all on function public.muaraku_create_direct_conversation(uuid, uuid) from public, anon;
 revoke all on function public.muaraku_withdraw_claim(uuid) from public, anon;
+revoke all on function public.muaraku_set_owned_report_status(uuid, text) from public, anon;
+revoke all on function public.muaraku_edit_global_message(uuid, text) from public, anon;
+revoke all on function public.muaraku_delete_global_message(uuid) from public, anon;
 grant execute on function public.muaraku_has_staff_role(text) to anon, authenticated, service_role;
 grant execute on function public.muaraku_is_current_user_active() to authenticated, service_role;
 grant execute on function public.muaraku_is_active_user(uuid) to service_role;
@@ -1396,6 +1530,9 @@ grant execute on function public.muaraku_can_send_message(uuid) to authenticated
 grant execute on function public.muaraku_can_view_claim(uuid) to authenticated, service_role;
 grant execute on function public.muaraku_create_direct_conversation(uuid, uuid) to authenticated, service_role;
 grant execute on function public.muaraku_withdraw_claim(uuid) to authenticated, service_role;
+grant execute on function public.muaraku_set_owned_report_status(uuid, text) to authenticated, service_role;
+grant execute on function public.muaraku_edit_global_message(uuid, text) to authenticated, service_role;
+grant execute on function public.muaraku_delete_global_message(uuid) to authenticated, service_role;
 
 -- --------------------------------------------------------------------------
 -- 17. Supabase Storage buckets and access policies
@@ -1724,6 +1861,7 @@ grant insert (reporter_user_id, report_type, title, description, category_id,
 grant update (title, description, category_id, location_label, city, occurred_at,
               color, brand, model, item_attributes)
   on public.reports to authenticated;
+grant delete on public.reports to authenticated;
 
 -- --------------------------------------------------------------------------
 -- 3. Merge moderation actions into the general audit log, then rename the
@@ -1846,6 +1984,20 @@ alter table public.support_ticket_messages enable row level security;
 alter table public.muara_ai_sessions enable row level security;
 alter table public.muara_ai_messages enable row level security;
 alter table public.terms_acceptances enable row level security;
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (
+       select 1 from pg_publication_tables
+       where pubname = 'supabase_realtime'
+         and schemaname = 'public'
+         and tablename = 'messages'
+     ) then
+    alter publication supabase_realtime add table public.messages;
+  end if;
+end;
+$$;
 
 -- --------------------------------------------------------------------------
 -- 6. Final structural assertion: the 22 target application tables must exist.

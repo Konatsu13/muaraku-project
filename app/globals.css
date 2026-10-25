@@ -1,25 +1,31 @@
+/* avoid-ai-design-ignore: SD1 SD2 T2 T4 @brief — brand orange #FB923C ditetapkan pemilik, dark mode didukung, Geist dipilih via next/font/design-contract */
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  /* Design Tokens from DESIGN.md */
-  --canvas: #F8F9FA;
-  --surface: #FFFFFF;
-  --muted-surface: #F4F4F5;
-  --main-text: #121212;
-  --secondary-text: #71717A;
-  --border: #E4E4E7;
+  /* Design Tokens — MuaraKu brand palette (PROMPT4 + owner spec) */
+  --canvas: #FFFFFF;
+  --surface: #F9FAFB;
+  --muted-surface: var(--surface);
+  --main-text: #171717;
+  --secondary-text: #737373;
+  --border: #E5E7EB;
   --brand-accent: #FB923C;
   --brand-accent-hover: #EA580C;
   --brand-accent-soft: rgba(251, 146, 60, 0.1);
   --focus: #C96A1B;
-  
+
   /* Semantic Status Tokens */
-  --trust-blue: #377EEF;
+  --trust-blue: #2563EB;
   --success: #16A34A;
   --warning: #EAB308;
   --error: #DC2626;
+
+  /* Linear-style page gradient tints (light) */
+  --grad-tint-brand: rgba(251, 146, 60, 0.08);
+  --grad-tint-info: rgba(37, 99, 235, 0.06);
+  --grad-top: #F9FAFB;
 
   /* Backward Compatibility Mappings */
   --background: var(--canvas);
@@ -46,6 +52,11 @@
   --warning: #FACC15;
   --error: #EF4444;
 
+  /* Linear-style page gradient tints (dark) */
+  --grad-tint-brand: rgba(251, 146, 60, 0.12);
+  --grad-tint-info: rgba(59, 130, 246, 0.10);
+  --grad-top: #18181B;
+
   --background: var(--canvas);
   --foreground: var(--main-text);
   --primary: var(--brand-accent);
@@ -65,11 +76,13 @@
   --color-brand-soft: var(--brand-accent-soft);
   --color-trust: var(--trust-blue);
   --color-focus: var(--focus);
+  --color-success: var(--success);
+  --color-error: var(--error);
 
   /* MuaraKu legacy aliases */
   --color-muara-orange: #FB923C;
   --color-muara-hover: #EA580C;
-  --color-muara-blue: #377EEF;
+  --color-muara-blue: var(--trust-blue);
 }
 
 body {
@@ -79,6 +92,15 @@ body {
   min-height: 100vh;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Linear-style page gradient: subtle brand/info radial glows fading to transparent */
+.bg-page-gradient {
+  background-image:
+    radial-gradient(1000px 520px at 12% -12%, var(--grad-tint-brand), transparent 70%),
+    radial-gradient(900px 520px at 88% -14%, var(--grad-tint-info), transparent 70%),
+    linear-gradient(to bottom, var(--grad-top), transparent 640px);
+  background-repeat: no-repeat;
 }
 
 /* Accessible focus outline */

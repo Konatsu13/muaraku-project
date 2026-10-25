@@ -1,3 +1,16 @@
+function resolveProfileMap(
+  rows: Array<{ user_id: string; display_name: string | null; avatar_path: string | null }> | null
+): Map<string, { display_name: string | null; avatar_path: string | null }> {
+  const map = new Map<string, { display_name: string | null; avatar_path: string | null }>();
+  for (const row of rows || []) {
+    map.set(row.user_id, {
+      display_name: row.display_name,
+      avatar_path: row.avatar_path,
+    });
+  }
+  return map;
+}
+
 import { createClient } from "./client";
 
 export interface ReportCategory {
@@ -87,7 +100,6 @@ export interface UpdateReportInput {
   brand?: string | null;
   model?: string | null;
   item_attributes?: Record<string, unknown>;
-  case_status?: "open" | "match_pending" | "claim_in_progress" | "returned" | "closed";
 }
 
 export interface FetchReportsFilter {
@@ -284,10 +296,6 @@ export async function fetchReports(filters?: FetchReportsFilter): Promise<{
         returned_at,
         created_at,
         updated_at,
-        user_profiles:reporter_user_id (
-          display_name,
-          avatar_path
-        ),
         report_categories:category_id (
           id,
           name_id,
@@ -405,6 +413,25 @@ export async function fetchReports(filters?: FetchReportsFilter): Promise<{
       }
     }
 
+    const reporterIds = Array.from(
+      new Set(
+        (data as Array<{ reporter_user_id?: string | null }>)
+          .map((r) => r.reporter_user_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+
+    let profileMap = new Map<string, { display_name: string | null; avatar_path: string | null }>();
+    if (reporterIds.length > 0) {
+      const { data: profs } = await supabase
+        .from("user_profiles")
+        .select("user_id, display_name, avatar_path")
+        .in("user_id", reporterIds);
+      profileMap = resolveProfileMap(
+        (profs || []) as Array<{ user_id: string; display_name: string | null; avatar_path: string | null }>
+      );
+    }
+
     const signedUrlMap = await getSignedMediaUrlsBatch(allPaths);
 
     // Resolve media signed URLs synchronously using batch map
@@ -437,11 +464,7 @@ export async function fetchReports(filters?: FetchReportsFilter): Promise<{
         }
       }
 
-        const rawProf = r.user_profiles;
-        const prof = (Array.isArray(rawProf) ? rawProf[0] : rawProf) as {
-          display_name?: string;
-          avatar_path?: string;
-        } | null;
+        const prof = r.reporter_user_id ? profileMap.get(r.reporter_user_id as string) || null : null;
 
         const rawCat = r.report_categories;
         const cat = (Array.isArray(rawCat) ? rawCat[0] : rawCat) as {
@@ -533,10 +556,6 @@ export async function fetchReportById(reportId: string): Promise<{
         returned_at,
         created_at,
         updated_at,
-        user_profiles:reporter_user_id (
-          display_name,
-          avatar_path
-        ),
         report_categories:category_id (
           id,
           name_id,
@@ -622,11 +641,15 @@ export async function fetchReportById(reportId: string): Promise<{
       }
     }
 
-    const rawProf = r.user_profiles;
-    const prof = (Array.isArray(rawProf) ? rawProf[0] : rawProf) as {
-      display_name?: string;
-      avatar_path?: string;
-    } | null;
+    let prof: { display_name?: string; avatar_path?: string } | null = null;
+    if (r.reporter_user_id) {
+      const { data: profData } = await supabase
+        .from("user_profiles")
+        .select("display_name, avatar_path")
+        .eq("user_id", r.reporter_user_id)
+        .maybeSingle();
+      if (profData) prof = profData;
+    }
 
     const rawCat = r.report_categories;
     const cat = (Array.isArray(rawCat) ? rawCat[0] : rawCat) as {
@@ -868,7 +891,8 @@ export async function createReport(
 }
 
 /**
- * Update an existing report.
+ * Update an existing report, optionally applying media changes (edit mode):
+ * remove existing photos and/or upload new ones. Ownership is enforced by RLS.
  */
 export async function updateReport(
   reportId: string,
@@ -879,14 +903,17 @@ export async function updateReport(
     private_location_note?: string | null;
     contact_preference?: "in_app" | "email" | "other";
     private_contact?: string | null;
+  },
+  mediaChanges?: {
+    filesToAdd?: File[];
+    mediaIdsToRemove?: string[];
   }
 ): Promise<{ success: boolean; error: Error | null }> {
   const supabase = createClient();
+  const uploadedStoragePaths: string[] = [];
 
   try {
-    const updatePayload: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
-    };
+    const updatePayload: Record<string, unknown> = {};
 
     if (updates.title !== undefined) {
       const trimmedTitle = updates.title.trim();
@@ -938,22 +965,114 @@ export async function updateReport(
     if (updates.brand !== undefined) updatePayload.brand = updates.brand?.trim() || null;
     if (updates.model !== undefined) updatePayload.model = updates.model?.trim() || null;
     if (updates.item_attributes !== undefined) updatePayload.item_attributes = updates.item_attributes;
-    if (updates.case_status !== undefined) {
-      updatePayload.case_status = updates.case_status;
-      if (updates.case_status === "closed") {
-        updatePayload.closed_at = new Date().toISOString();
-      } else if (updates.case_status === "returned") {
-        updatePayload.returned_at = new Date().toISOString();
+    if (Object.keys(updatePayload).length > 0) {
+      const { data: updatedReport, error } = await supabase
+        .from("reports")
+        .update(updatePayload)
+        .eq("id", reportId)
+        .select("id")
+        .maybeSingle();
+
+      if (error) {
+        return { success: false, error: new Error(error.message) };
+      }
+      if (!updatedReport) {
+        return {
+          success: false,
+          error: new Error("Laporan tidak ditemukan atau Anda tidak memiliki izin untuk mengubahnya."),
+        };
       }
     }
 
-    const { error } = await supabase
-      .from("reports")
-      .update(updatePayload)
-      .eq("id", reportId);
+    // Apply media changes if requested. All operations target rows scoped to
+    // this report id; visibility/deletion authority is enforced by RLS, so a
+    // non-owner attempt fails honestly instead of silently succeeding.
+    if (mediaChanges) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    if (error) {
-      return { success: false, error: new Error(error.message) };
+      // 1. Remove existing media rows (and their storage objects)
+      const idsToRemove = (mediaChanges.mediaIdsToRemove || []).filter(Boolean);
+      if (idsToRemove.length > 0) {
+        const { data: mediaRows, error: fetchError } = await supabase
+          .from("report_media")
+          .select("id, object_path")
+          .eq("report_id", reportId)
+          .in("id", idsToRemove);
+
+        if (fetchError) {
+          throw new Error(`Gagal membaca foto laporan: ${fetchError.message}`);
+        }
+
+        const rows = (mediaRows || []) as Array<{ id: string; object_path: string }>;
+        if (rows.length > 0) {
+          const { error: deleteMediaError } = await supabase
+            .from("report_media")
+            .delete()
+            .eq("report_id", reportId)
+            .in("id", rows.map((r) => r.id));
+
+          if (deleteMediaError) {
+            throw new Error(`Gagal menghapus foto dari laporan: ${deleteMediaError.message}`);
+          }
+
+          // Storage cleanup only after metadata deletion succeeded.
+          await supabase.storage
+            .from("report-images")
+            .remove(rows.map((r) => r.object_path));
+        }
+      }
+
+      // 2. Upload and store new files, mirroring createReport conventions
+      const filesToAdd = mediaChanges.filesToAdd || [];
+      if (filesToAdd.length > 0) {
+        if (!user) {
+          throw new Error("Sesi berakhir. Harap masuk kembali sebelum mengubah foto laporan.");
+        }
+
+        for (const file of filesToAdd) {
+          if (file.size > 8388608) {
+            throw new Error(`Ukuran file "${file.name}" melebihi batas 8MB`);
+          }
+
+          const ext = ALLOWED_REPORT_IMAGE_TYPES[file.type];
+          if (!ext) {
+            throw new Error(`Format file "${file.name}" harus JPG, PNG, atau WEBP`);
+          }
+
+          const cleanName = `${Date.now()}_${uploadedStoragePaths.length}.${ext}`;
+          // Bucket policy convention: <auth.uid()>/<report_id>/<filename>
+          const storagePath = `${user.id}/${reportId}/${cleanName}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from("report-images")
+            .upload(storagePath, file, {
+              cacheControl: "3600",
+              upsert: false,
+            });
+
+          if (uploadError) {
+            throw new Error(`Gagal mengunggah foto: ${uploadError.message}`);
+          }
+
+          uploadedStoragePaths.push(storagePath);
+
+          const { error: mediaError } = await supabase
+            .from("report_media")
+            .insert({
+              report_id: reportId,
+              object_path: storagePath,
+              alt_text: (updates.title?.trim() || "Foto barang").slice(0, 200),
+              sort_order: uploadedStoragePaths.length - 1,
+              uploaded_by: user.id,
+            });
+
+          if (mediaError) {
+            throw new Error(`Gagal menyimpan referensi media: ${mediaError.message}`);
+          }
+        }
+      }
     }
 
     // Update private details if provided
@@ -980,31 +1099,32 @@ export async function updateReport(
 
     return { success: true, error: null };
   } catch (err: unknown) {
+    // Roll back any storage objects uploaded during this update when a later
+    // step failed, so failed edits do not leave orphan files behind.
+    if (uploadedStoragePaths.length > 0) {
+      try {
+        await supabase.storage.from("report-images").remove(uploadedStoragePaths);
+      } catch (cleanupErr) {
+        console.error("Storage cleanup after failed update:", cleanupErr);
+      }
+    }
+
     const error = err instanceof Error ? err : new Error("Gagal memperbarui laporan");
     return { success: false, error };
   }
 }
 
-/**
- * Delete a report (and its media).
- */
-export async function deleteReport(reportId: string): Promise<{ success: boolean; error: Error | null }> {
+export async function setReportStatus(
+  reportId: string,
+  status: "returned" | "open"
+): Promise<{ success: boolean; error: Error | null }> {
   const supabase = createClient();
 
   try {
-    // 1. Fetch media to remove from storage
-    const { data: media } = await supabase
-      .from("report_media")
-      .select("object_path")
-      .eq("report_id", reportId);
-
-    if (media && media.length > 0) {
-      const paths = (media as Array<{ object_path: string }>).map((m) => m.object_path);
-      await supabase.storage.from("report-images").remove(paths);
-    }
-
-    // 2. Delete report from reports table (cascade takes care of report_media and private_details)
-    const { error } = await supabase.from("reports").delete().eq("id", reportId);
+    const { error } = await supabase.rpc("muaraku_set_owned_report_status", {
+      p_report_id: reportId,
+      p_case_status: status,
+    });
 
     if (error) {
       return { success: false, error: new Error(error.message) };
@@ -1012,8 +1132,74 @@ export async function deleteReport(reportId: string): Promise<{ success: boolean
 
     return { success: true, error: null };
   } catch (err: unknown) {
-    const error = err instanceof Error ? err : new Error("Gagal menghapus laporan");
+    const error = err instanceof Error ? err : new Error("Gagal mengubah status laporan");
     return { success: false, error };
+  }
+}
+
+/**
+ * Delete a report (and its media).
+ */
+export async function deleteReport(reportId: string): Promise<{
+  success: boolean;
+  error: Error | null;
+  warning: Error | null;
+}> {
+  const supabase = createClient();
+
+  try {
+    // 1. Fetch media to remove from storage
+    const { data: media, error: mediaError } = await supabase
+      .from("report_media")
+      .select("object_path")
+      .eq("report_id", reportId);
+
+    if (mediaError) {
+      return { success: false, error: new Error(mediaError.message), warning: null };
+    }
+
+    const paths = ((media || []) as Array<{ object_path: string }>).map(
+      (m) => m.object_path
+    );
+
+    // Delete the row first so a denied delete never leaves a live report
+    // pointing at images that were already removed from Storage.
+    const { data: deletedReport, error: deleteError } = await supabase
+      .from("reports")
+      .delete()
+      .eq("id", reportId)
+      .select("id")
+      .maybeSingle();
+
+    if (deleteError) {
+      return { success: false, error: new Error(deleteError.message), warning: null };
+    }
+    if (!deletedReport) {
+      return {
+        success: false,
+        error: new Error("Laporan tidak ditemukan atau Anda tidak memiliki izin untuk menghapusnya."),
+        warning: null,
+      };
+    }
+
+    if (paths.length > 0) {
+      const { error: storageError } = await supabase.storage
+        .from("report-images")
+        .remove(paths);
+
+      if (storageError) {
+        return {
+          success: true,
+          error: null,
+          warning: new Error(`Laporan terhapus, tetapi foto gagal dibersihkan: ${storageError.message}`),
+        };
+      }
+    }
+
+    return { success: true, error: null, warning: null };
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error("Gagal menghapus laporan");
+    return { success: false, error, warning: null };
   }
 }
 
@@ -1248,10 +1434,6 @@ export async function fetchClaimsForReport(reportId: string): Promise<{ data: Cl
           title,
           location_label
         ),
-        user_profiles:claimant_user_id (
-          display_name,
-          avatar_path
-        ),
         claim_evidence (
           id,
           storage_path,
@@ -1274,6 +1456,25 @@ export async function fetchClaimsForReport(reportId: string): Promise<{ data: Cl
         if (ev.storage_path) allPaths.push(ev.storage_path);
       }
     }
+    const claimantIds = Array.from(
+      new Set(
+        (data as Array<{ claimant_user_id?: string | null }>)
+          .map((c) => c.claimant_user_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+
+    let claimProfileMap = new Map<string, { display_name: string | null; avatar_path: string | null }>();
+    if (claimantIds.length > 0) {
+      const { data: profs } = await supabase
+        .from("user_profiles")
+        .select("user_id, display_name, avatar_path")
+        .in("user_id", claimantIds);
+      claimProfileMap = resolveProfileMap(
+        (profs || []) as Array<{ user_id: string; display_name: string | null; avatar_path: string | null }>
+      );
+    }
+
     const signedUrlMap = await getSignedMediaUrlsBatch(allPaths, "claim-evidence");
 
     // Resolve evidence signed URLs
@@ -1290,7 +1491,7 @@ export async function fetchClaimsForReport(reportId: string): Promise<{ data: Cl
       });
 
       const rawLost = c.lost_report as { id: string; title: string; location_label?: string | null } | null;
-      const rawProf = c.user_profiles as { display_name?: string | null; avatar_path?: string | null } | null;
+      const rawProf = c.claimant_user_id ? claimProfileMap.get(c.claimant_user_id as string) || null : null;
 
       return {
         id: String(c.id),
@@ -1367,10 +1568,6 @@ export async function fetchSavedReports(userId: string): Promise<{
         returned_at,
         created_at,
         updated_at,
-        user_profiles:reporter_user_id (
-          display_name,
-          avatar_path
-        ),
         report_categories:category_id (
           id,
           name_id,
@@ -1404,6 +1601,25 @@ export async function fetchSavedReports(userId: string): Promise<{
       }
     }
 
+    const savedReporterIds = Array.from(
+      new Set(
+        (data as Array<{ reporter_user_id?: string | null }>)
+          .map((r) => r.reporter_user_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+
+    let savedProfileMap = new Map<string, { display_name: string | null; avatar_path: string | null }>();
+    if (savedReporterIds.length > 0) {
+      const { data: profs } = await supabase
+        .from("user_profiles")
+        .select("user_id, display_name, avatar_path")
+        .in("user_id", savedReporterIds);
+      savedProfileMap = resolveProfileMap(
+        (profs || []) as Array<{ user_id: string; display_name: string | null; avatar_path: string | null }>
+      );
+    }
+
     const signedUrlMap = await getSignedMediaUrlsBatch(allPaths);
 
     const items: ReportDetailItem[] = (data as Array<Record<string, unknown>>).map((r) => {
@@ -1434,11 +1650,7 @@ export async function fetchSavedReports(userId: string): Promise<{
         }
       }
 
-      const rawProf = r.user_profiles;
-      const prof = (Array.isArray(rawProf) ? rawProf[0] : rawProf) as {
-        display_name?: string;
-        avatar_path?: string;
-      } | null;
+      const prof = r.reporter_user_id ? savedProfileMap.get(r.reporter_user_id as string) || null : null;
 
       const rawCat = r.report_categories;
       const cat = (Array.isArray(rawCat) ? rawCat[0] : rawCat) as {

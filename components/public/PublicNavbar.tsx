@@ -7,11 +7,11 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
-import { Sun, Moon, Globe, Menu, X } from "lucide-react";
+import { Sun, Moon, Globe, Menu, X, ShieldCheck } from "lucide-react";
 
 export function PublicNavbar() {
   const pathname = usePathname();
-  const { user, openAuthModal } = useAuth();
+  const { user, openAuthModal, isAdmin, isModerator } = useAuth();
   const { locale, setLocale } = useI18n();
   const { theme, setTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -33,7 +33,7 @@ export function PublicNavbar() {
   ];
 
   return (
-    <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/80 dark:bg-[#121214]/80 border-b border-zinc-200/80 dark:border-zinc-800 transition-colors">
+    <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-canvas/90 dark:bg-[#121214]/90 border-b border-subtle transition-colors">
       <div className="max-w-[1320px] mx-auto px-4 sm:px-6 h-18 flex items-center justify-between">
         {/* Brand: Logo + MuaraKu text in brand orange */}
         <Link href="/" className="flex items-center gap-2.5 group select-none">
@@ -77,7 +77,7 @@ export function PublicNavbar() {
           {/* Theme Pill Toggle [ ☼ ☾ ] */}
           <button
             onClick={toggleTheme}
-            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800/90 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200/80 dark:border-zinc-700 transition-colors min-h-[38px]"
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full bg-surface dark:bg-zinc-800/90 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200/80 dark:border-zinc-700 transition-colors min-h-[38px]"
             title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             aria-label="Toggle theme"
           >
@@ -88,7 +88,7 @@ export function PublicNavbar() {
           {/* Language Pill Toggle [ 🌐 EN / ID ] */}
           <button
             onClick={toggleLocale}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800/90 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200/80 dark:border-zinc-700 text-xs font-bold transition-colors min-h-[38px]"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface dark:bg-zinc-800/90 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200/80 dark:border-zinc-700 text-xs font-bold transition-colors min-h-[38px]"
             title="Switch language"
             aria-label="Switch language"
           >
@@ -96,18 +96,29 @@ export function PublicNavbar() {
             <span className="uppercase">{locale}</span>
           </button>
 
+          {/* Admin link for staff */}
+          {user && (isAdmin || isModerator) && (
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/20 text-xs font-bold transition-colors min-h-[38px]"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Admin</span>
+            </Link>
+          )}
+
           {/* CTA: Login (before auth) or Open App (after auth) */}
           {user ? (
             <Link
               href="/app"
-              className="inline-flex items-center justify-center px-5 py-2 rounded-xl bg-[#FB923C] hover:bg-[#EA580C] text-white text-sm font-semibold shadow-xs transition-colors min-h-[40px]"
+              className="inline-flex items-center justify-center px-5 py-2 rounded-xl bg-[#FB923C] hover:bg-[#EA580C] text-[#231206] text-sm font-bold transition-colors min-h-[40px]"
             >
               Open App
             </Link>
           ) : (
             <button
               onClick={() => openAuthModal("login")}
-              className="inline-flex items-center justify-center px-5 py-2 rounded-xl bg-[#FB923C] hover:bg-[#EA580C] text-white text-sm font-semibold shadow-xs transition-colors min-h-[40px] cursor-pointer"
+              className="inline-flex items-center justify-center px-5 py-2 rounded-xl bg-[#FB923C] hover:bg-[#EA580C] text-[#231206] text-sm font-bold transition-colors min-h-[40px] cursor-pointer"
             >
               Login
             </button>
@@ -139,7 +150,7 @@ export function PublicNavbar() {
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#18181B] px-6 py-5 space-y-4 shadow-lg animate-fade-in">
+        <div className="md:hidden border-t border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-[#18181B] px-6 py-5 space-y-4 shadow-lg animate-fade-in">
           <nav className="space-y-2">
             {navLinks.map((link) => (
               <Link
@@ -160,12 +171,25 @@ export function PublicNavbar() {
           <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
             <button
               onClick={toggleLocale}
-              className="flex items-center gap-2 text-xs font-bold px-3.5 py-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
+              className="flex items-center gap-2 text-xs font-bold px-3.5 py-2 rounded-full bg-surface dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
             >
               <Globe className="w-3.5 h-3.5 text-zinc-500" />
               <span>Bahasa: {locale.toUpperCase()}</span>
             </button>
           </div>
+
+          {user && (isAdmin || isModerator) && (
+            <div className="pt-2">
+              <Link
+                href="/admin"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full py-2.5 bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-center font-bold rounded-xl text-xs flex items-center justify-center gap-2"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>Konsol Admin &amp; Moderasi</span>
+              </Link>
+            </div>
+          )}
 
           <div className="pt-2">
             {user ? (

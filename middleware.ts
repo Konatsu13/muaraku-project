@@ -41,17 +41,42 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Protect /app routes - requires logged-in user
-  if (pathname.startsWith("/app") && !user) {
-    const returnUrl = encodeURIComponent(pathname + request.nextUrl.search);
-    const redirectUrl = new URL(`/?auth=login&next=${returnUrl}`, request.url);
-    return NextResponse.redirect(redirectUrl);
+  if (pathname.startsWith("/app")) {
+    if (!user) {
+      const returnUrl = encodeURIComponent(pathname + request.nextUrl.search);
+      const redirectUrl = new URL(`/?auth=login&next=${returnUrl}`, request.url);
+      return NextResponse.redirect(redirectUrl);
+    }
   }
 
-  // Protect /admin routes - requires logged-in user
-  if (pathname.startsWith("/admin") && !user) {
-    const returnUrl = encodeURIComponent(pathname + request.nextUrl.search);
-    const redirectUrl = new URL(`/?auth=login&next=${returnUrl}`, request.url);
-    return NextResponse.redirect(redirectUrl);
+  // Protect /admin routes - requires logged-in user with staff role
+  if (pathname.startsWith("/admin")) {
+    if (!user) {
+      const returnUrl = encodeURIComponent(pathname + request.nextUrl.search);
+      const redirectUrl = new URL(`/?auth=login&next=${returnUrl}`, request.url);
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    // Server-side check for staff authorization in staff_roles
+    const { data: staffData } = await supabase
+      .from("staff_roles")
+      .select("role")
+      .eq("user_id", user.id);
+
+    const roles = (staffData || []).map((r: { role: string }) => r.role);
+    const isSupportRoute =
+      pathname === "/admin/support" || pathname.startsWith("/admin/support/");
+    const hasAdminAccess = isSupportRoute
+      ? roles.includes("admin") || roles.includes("support")
+      : roles.includes("admin") || roles.includes("moderator");
+
+    if (!hasAdminAccess) {
+      return NextResponse.redirect(new URL("/app?error=unauthorized_admin", request.url));
+    }
+
+    if (pathname === "/admin" && roles.includes("support") && !roles.includes("admin")) {
+      return NextResponse.redirect(new URL("/admin/support", request.url));
+    }
   }
 
   return supabaseResponse;

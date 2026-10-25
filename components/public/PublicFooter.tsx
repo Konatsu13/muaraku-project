@@ -10,9 +10,9 @@ export function PublicFooter() {
   const { t } = useI18n();
 
   return (
-    <footer className="bg-white dark:bg-[#121214] border-t border-zinc-200 dark:border-zinc-800 transition-colors">
+    <footer className="bg-surface dark:bg-[#18181B] transition-colors">
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 pb-10 border-b border-zinc-100 dark:border-zinc-800/80">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 pb-8">
           {/* Col 1: Brand Info */}
           <div className="md:col-span-2 space-y-3">
             <Link href="/" className="flex items-center gap-2.5">
@@ -40,7 +40,7 @@ export function PublicFooter() {
 
           {/* Col 2: Navigation Links */}
           <div className="space-y-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-900 dark:text-zinc-100">
+            <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               Navigasi
             </h4>
             <ul className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -69,7 +69,7 @@ export function PublicFooter() {
 
           {/* Col 3: Community & Legal */}
           <div className="space-y-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-900 dark:text-zinc-100">
+            <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               Ketentuan &amp; Komunitas
             </h4>
             <ul className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">

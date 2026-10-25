@@ -16,6 +16,7 @@ import {
   Globe,
   Plus,
   Settings,
+  ShieldCheck,
 } from "lucide-react";
 
 interface AppHeaderProps {
@@ -26,7 +27,7 @@ interface AppHeaderProps {
 export function AppHeader({ onOpenSettings, onOpenReportModal }: AppHeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, profile, openAuthModal } = useAuth();
+  const { user, profile, openAuthModal, isAdmin, isModerator } = useAuth();
   const { locale, setLocale } = useI18n();
   const { theme, setTheme } = useTheme();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -120,6 +121,19 @@ export function AppHeader({ onOpenSettings, onOpenReportModal }: AppHeaderProps)
             <Plus className="w-4 h-4" />
             <span>Lapor Barang</span>
           </button>
+        )}
+
+        {/* Admin Console (Staff Only) */}
+        {(isAdmin || isModerator) && (
+          <Link
+            href="/admin"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/20 text-xs font-bold transition-colors"
+            title="Buka Konsol Staf & Admin"
+            aria-label="Konsol Admin"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Admin</span>
+          </Link>
         )}
 
         {/* Notification Bell */}

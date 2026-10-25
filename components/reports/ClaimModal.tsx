@@ -49,12 +49,18 @@ export function ClaimModal({
 
   // Fetch claimant's lost reports
   useEffect(() => {
-    if (isOpen && user?.id) {
+    if (!isOpen || !user?.id) return;
+    let cancelled = false;
+    // Defer one tick so the effect body does not call setState synchronously
+    // (react-hooks/set-state-in-effect).
+    const timer = setTimeout(() => {
+      if (cancelled) return;
       setLoadingMyReports(true);
       fetchReports({
         type: "lost",
         reporter_user_id: user.id,
       }).then((res) => {
+        if (cancelled) return;
         setLoadingMyReports(false);
         if (res.data) {
           setMyLostReports(res.data);
@@ -63,7 +69,11 @@ export function ClaimModal({
           }
         }
       });
-    }
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [isOpen, user?.id]);
 
   if (!isOpen || !foundReport) return null;

@@ -43,11 +43,16 @@ MuaraKu aims to bring these interactions into one platform, combining structured
 - **Frontend & Framework:** Next.js 16 (App Router, Turbopack, React 19)
 - **Bahasa:** TypeScript 5.x (Strict Mode)
 - **Styling & Icons:** Tailwind CSS v4, Lucide Icons
-- **Backend & Database:** Supabase PostgreSQL (28 tabel, Row Level Security, Storage Buckets)
+- **Backend & Database:** Supabase PostgreSQL, Row Level Security, Storage Buckets
 - **Autentikasi & Keamanan:** Supabase Auth (Email OTP & Google OAuth) + Cloudflare Turnstile
 - **Penerjemahan:** Google Cloud Translation API v2 dengan caching pintar di PostgreSQL
 - **Asisten AI:** Gemini API & OpenAI API
 
+> **Status skema:** README dan `Document/MuaraKu_Rebuild_Kit_v2/DATABASE.md`
+> memuat referensi skema legacy. Installer `MuaraKu_Fresh_Install_v2.2.sql`
+> memiliki tahap penyederhanaan dan pemeriksaan akhir 22 tabel; struktur database
+> Supabase live belum diverifikasi pada pengerjaan ini. Jangan menganggap angka
+> tersebut sebagai bukti bahwa skema live sudah sama.
 
 ## Technology Stack
 

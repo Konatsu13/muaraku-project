@@ -16,6 +16,8 @@ const ALLOWED_REDIRECT_PREFIXES = [
   "/support",
   "/privacy",
   "/terms",
+  "/auth/set-password",
+  "/set-password",
 ] as const;
 
 function stripTrailingSlash(value: string): string {

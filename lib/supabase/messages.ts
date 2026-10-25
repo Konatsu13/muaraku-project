@@ -405,6 +405,50 @@ export async function sendConversationMessage(
   }
 }
 
+export async function editGlobalMessage(
+  messageId: string,
+  body: string
+): Promise<{ error: Error | null }> {
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return { error: new Error("Pesan tidak boleh kosong") };
+  }
+  if (trimmed.length > 5000) {
+    return { error: new Error("Pesan maksimal 5000 karakter") };
+  }
+
+  const supabase = createClient();
+
+  try {
+    const { error } = await supabase.rpc("muaraku_edit_global_message", {
+      p_message_id: messageId,
+      p_body: trimmed,
+    });
+
+    return { error: error ? new Error(error.message) : null };
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error("Gagal mengedit pesan");
+    return { error };
+  }
+}
+
+export async function deleteGlobalMessage(
+  messageId: string
+): Promise<{ error: Error | null }> {
+  const supabase = createClient();
+
+  try {
+    const { error } = await supabase.rpc("muaraku_delete_global_message", {
+      p_message_id: messageId,
+    });
+
+    return { error: error ? new Error(error.message) : null };
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error("Gagal menghapus pesan");
+    return { error };
+  }
+}
+
 /**
  * Create or reuse a direct conversation through the schema's controlled RPC.
  * The client never inserts into `conversations` or `conversation_members`

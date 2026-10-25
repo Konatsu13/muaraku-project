@@ -16,6 +16,7 @@ export interface UserProfile {
 }
 
 export type AuthModalView = "login" | "register" | "otp" | "forgot" | null;
+export type OtpFlow = "signup" | "email" | "recovery";
 
 interface AuthContextType {
   user: User | null;
@@ -28,9 +29,11 @@ interface AuthContextType {
   isLoading: boolean;
   authModalView: AuthModalView;
   pendingEmail: string;
-  openAuthModal: (view?: AuthModalView, email?: string) => void;
+  otpFlow: OtpFlow;
+  openAuthModal: (view?: AuthModalView, email?: string, flow?: OtpFlow) => void;
   closeAuthModal: () => void;
   setPendingEmail: (email: string) => void;
+  setOtpFlow: (flow: OtpFlow) => void;
   signOut: () => Promise<void>;
   switchAccount: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: Error | null }>;
@@ -48,9 +51,11 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   authModalView: null,
   pendingEmail: "",
+  otpFlow: "signup",
   openAuthModal: () => {},
   closeAuthModal: () => {},
   setPendingEmail: () => {},
+  setOtpFlow: () => {},
   signOut: async () => {},
   switchAccount: async () => {},
   updateProfile: async () => ({ error: null }),
@@ -65,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [authModalView, setAuthModalView] = useState<AuthModalView>(null);
   const [pendingEmail, setPendingEmail] = useState("");
+  const [otpFlow, setOtpFlow] = useState<OtpFlow>("signup");
 
   const supabase = useMemo(() => createClient(), []);
   const userRef = useRef<User | null>(null);
@@ -170,10 +176,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [supabase]);
 
-  const openAuthModal = useCallback((view: AuthModalView = "login", email = "") => {
-    if (email) setPendingEmail(email);
-    setAuthModalView(view);
-  }, []);
+  const openAuthModal = useCallback(
+    (view: AuthModalView = "login", email = "", flow?: OtpFlow) => {
+      if (email) setPendingEmail(email);
+      if (flow) setOtpFlow(flow);
+      setAuthModalView(view);
+    },
+    []
+  );
 
   const closeAuthModal = useCallback(() => {
     setAuthModalView(null);
@@ -247,9 +257,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         authModalView,
         pendingEmail,
+        otpFlow,
         openAuthModal,
         closeAuthModal,
         setPendingEmail,
+        setOtpFlow,
         signOut,
         switchAccount,
         updateProfile,

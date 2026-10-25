@@ -25,7 +25,7 @@ import {
 export function AuthModal() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { authModalView, closeAuthModal, openAuthModal, pendingEmail, setPendingEmail } = useAuth();
+  const { authModalView, closeAuthModal, openAuthModal, pendingEmail, setPendingEmail, otpFlow } = useAuth();
   const { t, locale } = useI18n();
   const supabase = createClient();
   const termsCheckboxId = useId();
@@ -252,7 +252,7 @@ export function AuthModal() {
           const destination = getSafeReturnUrl();
           router.replace(destination);
         } else {
-          openAuthModal("otp");
+          openAuthModal("otp", cleanEmail, "signup");
         }
       }
     } catch (err: unknown) {
@@ -273,26 +273,24 @@ export function AuthModal() {
     try {
       const cleanEmail = email.trim().toLowerCase();
       const cleanToken = otpCode.trim();
+      const verifyType = otpFlow === "recovery" ? "recovery" : otpFlow === "email" ? "email" : "signup";
 
-      // Verify OTP via Supabase Auth
-      // Try type 'signup' first, fallback to 'email'
-      let { error } = await supabase.auth.verifyOtp({
+      const { error } = await supabase.auth.verifyOtp({
         email: cleanEmail,
         token: cleanToken,
-        type: "signup",
+        type: verifyType,
       });
 
       if (error) {
-        const emailVerify = await supabase.auth.verifyOtp({
-          email: cleanEmail,
-          token: cleanToken,
-          type: "email",
-        });
-        error = emailVerify.error;
-      }
-
-      if (error) {
-        setErrorMsg(t.auth.invalid_otp_error);
+        if (error.status === 429) {
+          setErrorMsg("Batas percobaan verifikasi terlampaui. Harap tunggu beberapa saat.");
+        } else if (/expired|kedaluwarsa/i.test(error.message)) {
+          setErrorMsg("Kode OTP telah kedaluwarsa. Silakan klik 'Kirim Ulang Kode'.");
+        } else if (/already confirmed|already registered/i.test(error.message)) {
+          setErrorMsg("Email ini sudah terkonfirmasi. Silakan masuk dengan kata sandi Anda.");
+        } else {
+          setErrorMsg(error.message || t.auth.invalid_otp_error);
+        }
         return;
       }
 
@@ -311,25 +309,36 @@ export function AuthModal() {
     if (cooldown > 0 || loading) return;
     setErrorMsg(null);
     setSuccessMsg(null);
-    if (!hasTurnstileToken()) return;
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.resend({
-        type: "signup",
-        email: email.trim().toLowerCase(),
-        options: {
-          captchaToken: activeTurnstileToken || undefined,
-        },
-      });
+      const cleanEmail = email.trim().toLowerCase();
+      let resendError = null;
 
-      if (error) {
-        if (error.status === 429) {
-          const match = error.message.match(/(\d+)\s*seconds?/i);
+      if (otpFlow === "recovery") {
+        const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+          redirectTo: getAuthCallbackUrl("/auth/set-password?recovery=1"),
+          captchaToken: activeTurnstileToken || undefined,
+        });
+        resendError = error;
+      } else {
+        const { error } = await supabase.auth.resend({
+          type: otpFlow === "email" ? "email_change" : "signup",
+          email: cleanEmail,
+          options: {
+            captchaToken: activeTurnstileToken || undefined,
+          },
+        });
+        resendError = error;
+      }
+
+      if (resendError) {
+        if (resendError.status === 429) {
+          const match = resendError.message.match(/(\d+)\s*seconds?/i);
           setCooldown(match && match[1] ? parseInt(match[1], 10) : 60);
           setErrorMsg("Harap tunggu sebelum meminta kode OTP kembali.");
         } else {
-          setErrorMsg(error.message);
+          setErrorMsg(resendError.message);
         }
       } else {
         setCooldown(60);
@@ -356,7 +365,7 @@ export function AuthModal() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-        redirectTo: getAuthCallbackUrl("/app/profile"),
+        redirectTo: getAuthCallbackUrl("/auth/set-password?recovery=1"),
         captchaToken: activeTurnstileToken || undefined,
       });
 
@@ -727,7 +736,14 @@ export function AuthModal() {
                   required
                   autoFocus
                   value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const val = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+                    if (val) setOtpCode(val);
+                  }}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   placeholder="123456"
                   className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl text-center font-mono text-lg tracking-[0.5em] font-bold text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all min-h-[44px]"
                 />

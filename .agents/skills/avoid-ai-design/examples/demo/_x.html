@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- Render scaffold for docs/x-hero.png (1600x900, 16:9 for X). Not part of the lesson. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  :root{ --ground:#e8ecf0; --ink:#14202b; --muted:#52606d; }
+  html,body{ width:1600px; height:900px; overflow:hidden; }
+  body{ background:var(--ground); color:var(--ink); font-family:"Schibsted Grotesk","Segoe UI",sans-serif; -webkit-font-smoothing:antialiased; display:flex; flex-direction:column; }
+  .top{ display:flex; justify-content:space-between; align-items:baseline; padding:32px 60px 0; }
+  .wm{ font-size:24px; font-weight:800; letter-spacing:-.02em; }
+  .tag{ font-size:17px; color:var(--muted); }
+  .stage{ flex:1; display:flex; justify-content:center; align-items:center; gap:44px; }
+  .label{ font-size:17px; font-weight:700; margin:0 0 12px 2px; }
+  .label span{ font-weight:400; color:var(--muted); }
+  .panel{ width:720px; height:690px; border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 1px 0 rgba(20,32,43,.08), 0 30px 60px -34px rgba(20,32,43,.5); }
+  .panel iframe{ width:1280px; height:1227px; border:0; transform:scale(.5625); transform-origin:top left; }
+</style>
+</head>
+<body>
+  <div class="top"><div class="wm">avoid-ai-design</div><div class="tag">One real page, audited and rewritten</div></div>
+  <div class="stage">
+    <div><p class="label">Before <span>AI-generated</span></p><div class="panel"><iframe src="slop.html" scrolling="no"></iframe></div></div>
+    <div><p class="label">After <span>same page and copy, rewritten by the skill</span></p><div class="panel"><iframe src="refined.html" scrolling="no"></iframe></div></div>
+  </div>
+</body>
+</html>

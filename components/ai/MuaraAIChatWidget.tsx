@@ -1,232 +1,256 @@
 "use client";
 
-import React, { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { Bot, Send, Sparkles, User, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-import {
-  Sparkles,
-  X,
-  Send,
-  Bot,
-  User,
-  Loader2,
-} from "lucide-react";
 
 interface ChatMessage {
-  id: string;
-  sender: "user" | "ai";
+  id: number;
+  sender: "user" | "assistant";
   text: string;
-  time: string;
-}
-
-let chatCounter = 0;
-function nextMessageId(prefix: string): string {
-  chatCounter += 1;
-  return `${prefix}-${chatCounter}`;
+  source?: string | null;
 }
 
 export function MuaraAIChatWidget() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "msg-welcome",
-      sender: "ai",
-      text: t.muara_ai.greeting,
-      time: "Baru saja",
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [error, setError] = useState("");
+  const [lastFailedQuestion, setLastFailedQuestion] = useState("");
+  const messageId = useRef(0);
+  const historyRef = useRef<HTMLDivElement>(null);
 
-  const quickPrompts = [
-    t.muara_ai.quick_1,
-    t.muara_ai.quick_2,
-    t.muara_ai.quick_3,
-  ];
+  const quickPrompts = [t.muara_ai.quick_1, t.muara_ai.quick_2, t.muara_ai.quick_3];
 
-  const handleSend = async (questionText?: string) => {
-    const textToSend = questionText || input;
-    if (!textToSend.trim()) return;
+  useEffect(() => {
+    const history = historyRef.current;
+    if (history) history.scrollTop = history.scrollHeight;
+  }, [messages, loading]);
 
-    const userMsg: ChatMessage = {
-      id: nextMessageId("usr"),
-      sender: "user",
-      text: textToSend.trim(),
-      time: "Baru saja",
-    };
+  const sendQuestion = async (question: string, addUserMessage: boolean) => {
+    const trimmed = question.trim();
+    if (!trimmed || loading) return;
 
-    setMessages((prev) => [...prev, userMsg]);
-    if (!questionText) setInput("");
+    setError("");
+    setLastFailedQuestion("");
     setLoading(true);
+    if (addUserMessage) {
+      setMessages((previous) => [
+        ...previous,
+        { id: ++messageId.current, sender: "user", text: trimmed },
+      ]);
+      setInput("");
+    }
 
     try {
-      // Connect to AI API route or use knowledge-base fallback
-      const res = await fetch("/api/ai/chat", {
+      const response = await fetch("/api/ai/chat", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: textToSend }),
+        body: JSON.stringify({ message: trimmed, locale }),
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        const aiMsg: ChatMessage = {
-          id: nextMessageId("ai"),
-          sender: "ai",
-          text: data.reply,
-          time: "Baru saja",
-        };
-        setMessages((prev) => [...prev, aiMsg]);
-      } else {
-        throw new Error("Fallback needed");
-      }
-    } catch {
-      // Intelligent built-in knowledge response fallback
-      let reply = "Saya memahami pertanyaan Anda. Di MuaraKu, keamanan dan privasi adalah prioritas utama.";
-      const lower = textToSend.toLowerCase();
-
-      if (lower.includes("lapor") || lower.includes("hilang")) {
-        reply = "Untuk melaporkan barang hilang, klik tombol '+ Buat Laporan' di sidebar atau header. Masukkan ciri umum untuk publik, lalu tuliskan ciri rahasia (nomor seri, isi tersembunyi) di kolom Bukti Privat agar tidak diketahui orang lain.";
-      } else if (lower.includes("serah terima") || lower.includes("tips") || lower.includes("aman")) {
-        reply = "Tips serah terima aman: 1) Bertemu di lokasi publik yang ramai (lobi kampus, posko keamanan), 2) Jangan pernah transfer uang muka atau tebusan, 3) Verifikasi ciri rahasia sebelum barang diserahkan.";
-      } else if (lower.includes("klaim") || lower.includes("verifikasi")) {
-        reply = "Untuk mengklaim barang, buka detail laporan barang temuan lalu klik 'Klaim Kepemilikan'. Anda akan diminta mengisi bukti kepemilikan privat yang hanya dapat dibaca oleh penemu barang.";
-      } else if (lower.includes("petugas") || lower.includes("kuning")) {
-        reply = "Badge kuning 'Petugas lokasi terverifikasi' menandakan staf resmi kampus, perpustakaan, atau stasiun yang telah diaudit oleh admin MuaraKu.";
-      }
-
-      const aiMsg: ChatMessage = {
-        id: nextMessageId("ai"),
-        sender: "ai",
-        text: reply,
-        time: "Baru saja",
+      const result = (await response.json()) as {
+        error_code?: string;
+        reply?: string;
+        source?: string | null;
       };
-      setMessages((prev) => [...prev, aiMsg]);
+
+      if (!response.ok || typeof result.reply !== "string" || !result.reply.trim()) {
+        const message =
+          response.status === 429
+            ? t.muara_ai.rate_limited
+            : response.status === 401
+              ? t.muara_ai.sign_in_required
+              : t.muara_ai.error;
+        setError(message);
+        setLastFailedQuestion(trimmed);
+        return;
+      }
+
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: ++messageId.current,
+          sender: "assistant",
+          text: result.reply!.trim(),
+          source: result.source,
+        },
+      ]);
+    } catch {
+      setError(t.muara_ai.error);
+      setLastFailedQuestion(trimmed);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] md:bottom-6 right-4 md:right-5 z-40">
-      {/* Floating Toggle Button */}
-      {!isOpen && (
+    <div className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-4 z-40 md:bottom-6 md:right-5">
+      {!isOpen ? (
         <button
+          type="button"
           onClick={() => setIsOpen(true)}
-          className="flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-0.5"
-          title="Buka Asisten Muara AI"
+          className="inline-flex min-h-11 items-center gap-2 rounded-md bg-brand px-4 text-sm font-semibold text-zinc-950 hover:bg-orange-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
         >
-          <Sparkles className="w-5 h-5 text-amber-200" />
-          <span className="text-xs font-bold tracking-wide">Muara AI</span>
+          <Sparkles className="h-4 w-4" aria-hidden="true" />
+          <span>{t.muara_ai.widget_title}</span>
         </button>
-      )}
-
-      {/* Chat Window Panel */}
-      {isOpen && (
-        <div className="w-[340px] sm:w-[380px] h-[520px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-scale-up">
-          {/* Header */}
-          <div className="p-4 bg-orange-500 text-white flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold leading-tight">
-                  {t.muara_ai.widget_title}
-                </h3>
-                <p className="text-[10px] text-orange-100">
-                  {t.muara_ai.widget_subtitle}
-                </p>
-              </div>
+      ) : (
+        <section
+          role="dialog"
+          aria-labelledby="muara-ai-title"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setIsOpen(false);
+          }}
+          className="flex h-[min(34rem,calc(100dvh-8rem-env(safe-area-inset-bottom)))] w-[calc(100vw-2rem)] max-w-[380px] flex-col overflow-hidden rounded-xl border border-subtle bg-canvas text-main-text"
+        >
+          <header className="flex items-center justify-between gap-3 border-b border-subtle px-4 py-3">
+            <div>
+              <h2 id="muara-ai-title" className="text-sm font-semibold">
+                {t.muara_ai.widget_title}
+              </h2>
+              <p className="mt-1 text-xs text-secondary-text">
+                {t.muara_ai.widget_subtitle}
+              </p>
             </div>
             <button
+              type="button"
               onClick={() => setIsOpen(false)}
-              className="p-1 rounded-lg hover:bg-white/20 text-white transition-colors"
-              aria-label="Tutup"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+              aria-label={t.common.close}
             >
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
-          </div>
+          </header>
 
-          {/* Messages Area */}
-          <div className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-[#FFFCF8]/60 dark:bg-zinc-900/60 custom-scrollbar text-xs">
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`flex gap-2.5 ${
-                  m.sender === "user" ? "flex-row-reverse" : "flex-row"
-                }`}
-              >
-                <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] flex-shrink-0 ${
-                    m.sender === "user"
-                      ? "bg-zinc-800 text-white"
-                      : "bg-orange-500 text-white"
-                  }`}
-                >
-                  {m.sender === "user" ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
-                </div>
-                <div
-                  className={`p-3 rounded-2xl max-w-[80%] leading-relaxed ${
-                    m.sender === "user"
-                      ? "bg-orange-500 text-white rounded-tr-xs"
-                      : "bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200/80 dark:border-zinc-700/80 rounded-tl-xs shadow-xs"
-                  }`}
-                >
-                  {m.text}
+          <div
+            ref={historyRef}
+            className="flex-1 space-y-4 overflow-y-auto px-4 py-4"
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions text"
+            aria-label={t.muara_ai.widget_title}
+          >
+            {messages.length === 0 ? (
+              <div className="space-y-4">
+                <p className="text-sm leading-6 text-secondary-text">
+                  {t.muara_ai.first_use}
+                </p>
+                <div className="flex flex-col items-start gap-2">
+                  {quickPrompts.map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      disabled={loading}
+                      onClick={() => void sendQuestion(prompt, true)}
+                      className="min-h-11 max-w-full rounded-md border border-subtle px-3 py-2 text-left text-sm hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)] disabled:opacity-60"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
                 </div>
               </div>
-            ))}
+            ) : (
+              messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex items-start gap-2.5 ${
+                    message.sender === "user" ? "flex-row-reverse" : ""
+                  }`}
+                >
+                  <span
+                    className="mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface text-secondary-text"
+                    aria-hidden="true"
+                  >
+                    {message.sender === "user" ? (
+                      <User className="h-4 w-4" />
+                    ) : (
+                      <Bot className="h-4 w-4" />
+                    )}
+                  </span>
+                  <div
+                    className={`max-w-[84%] rounded-lg px-3 py-2.5 text-sm leading-6 ${
+                      message.sender === "user"
+                        ? "bg-brand text-zinc-950"
+                        : "bg-surface text-main-text"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                    {message.source === "muaraku_help_safety" && (
+                      <p className="mt-2 text-xs text-secondary-text">
+                        {t.muara_ai.source_guidance}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
 
             {loading && (
-              <div className="flex items-center gap-2 text-zinc-400 p-2 text-xs">
-                <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
-                <span>Muara AI sedang mengetik...</span>
-              </div>
+              <p className="text-sm text-secondary-text" role="status">
+                {t.muara_ai.pending}
+              </p>
             )}
           </div>
 
-          {/* Quick Prompts */}
-          <div className="px-3 py-2 bg-zinc-50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800 flex gap-1.5 overflow-x-auto no-scrollbar">
-            {quickPrompts.map((q, i) => (
-              <button
-                key={i}
-                onClick={() => handleSend(q)}
-                className="whitespace-nowrap px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-[11px] text-zinc-600 dark:text-zinc-400 hover:text-orange-600 dark:hover:text-orange-400 hover:border-orange-300 transition-colors"
-              >
-                {q}
-              </button>
-            ))}
-          </div>
-
-          {/* Input Area */}
-          <div className="p-3 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800">
+          <div className="space-y-3 border-t border-subtle p-3">
+            {error && (
+              <div className="space-y-2" role="alert">
+                <p className="text-sm text-red-700">{error}</p>
+                {lastFailedQuestion && (
+                  <button
+                    type="button"
+                    onClick={() => void sendQuestion(lastFailedQuestion, false)}
+                    disabled={loading}
+                    className="min-h-11 text-sm font-medium text-trust underline-offset-4 hover:underline disabled:opacity-60"
+                  >
+                    {t.muara_ai.retry}
+                  </button>
+                )}
+              </div>
+            )}
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSend();
+              onSubmit={(event) => {
+                event.preventDefault();
+                void sendQuestion(input, true);
               }}
               className="flex items-center gap-2"
             >
+              <label className="sr-only" htmlFor="muara-ai-input">
+                {t.muara_ai.input_label}
+              </label>
               <input
+                id="muara-ai-input"
                 type="text"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                maxLength={2_000}
+                onChange={(event) => setInput(event.target.value)}
                 placeholder={t.muara_ai.input_placeholder}
-                className="flex-1 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                className="min-h-11 min-w-0 flex-1 rounded-md border border-subtle bg-canvas px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
               />
               <button
                 type="submit"
                 disabled={!input.trim() || loading}
-                className="p-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl disabled:opacity-40 transition-colors"
+                aria-label={t.muara_ai.send}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-brand text-zinc-950 hover:bg-orange-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <Send className="w-3.5 h-3.5" />
+                <Send className="h-4 w-4" aria-hidden="true" />
               </button>
             </form>
-            <p className="text-[10px] text-zinc-400 text-center mt-2 leading-tight">
-              {t.muara_ai.disclaimer}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-secondary-text">
+              <p>{t.muara_ai.disclaimer}</p>
+              <Link
+                href="/support"
+                className="min-h-11 inline-flex items-center font-medium text-trust underline-offset-4 hover:underline"
+              >
+                {t.muara_ai.human_support}
+              </Link>
+            </div>
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

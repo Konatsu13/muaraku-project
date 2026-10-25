@@ -1,5 +1,11 @@
 # MuaraKu — Database Map & Review Notes
 
+> **Status:** Dokumen ini memetakan sumber skema legacy dan bukan kontrak untuk
+> database live. Installer lokal `MuaraKu_Fresh_Install_v2.2.sql` menyertakan
+> penyederhanaan di bagian akhir dengan pemeriksaan 22 tabel. Database Supabase
+> live belum dapat dibandingkan dalam sesi ini; verifikasi read-only wajib
+> dilakukan sebelum menerapkan asumsi atau proposal apa pun.
+
 **Source:** `database/source/muaraku_supabase_schema(2).sql` (file uploaded by the user). This document maps the explicit foreign keys, primary/unique relationships, and the intent stated in SQL comments. It does not replace runtime testing.
 
 ## 1. Important source rules

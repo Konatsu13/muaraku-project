@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import {
   Compass,
   PackageSearch,
@@ -10,6 +11,7 @@ import {
   Search,
   Globe2,
   Mail,
+  ShieldCheck,
 } from "lucide-react";
 
 /**
@@ -28,6 +30,12 @@ const MAIN_MENU = [
 
 export function AppBottomNav() {
   const pathname = usePathname();
+  const { isAdmin, isModerator } = useAuth();
+  const isStaff = isAdmin || isModerator;
+
+  const navItems = isStaff
+    ? [...MAIN_MENU, { href: "/admin", label: "Admin", icon: ShieldCheck }]
+    : MAIN_MENU;
 
   return (
     <div className="md:hidden shrink-0 px-3 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
@@ -35,8 +43,8 @@ export function AppBottomNav() {
         aria-label="Menu utama aplikasi"
         className="mx-auto max-w-md rounded-2xl border border-zinc-200/90 dark:border-zinc-800 bg-white/90 dark:bg-[#18181B]/95 p-1.5 shadow-[0_14px_36px_-18px_rgba(24,24,27,0.55)] backdrop-blur-xl"
       >
-        <div className="grid grid-cols-6 gap-1">
-          {MAIN_MENU.map((item) => {
+        <div className={`grid ${isStaff ? "grid-cols-7" : "grid-cols-6"} gap-1`}>
+          {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
               item.href === "/app" ? pathname === "/app" : pathname.startsWith(item.href);

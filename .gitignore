@@ -44,6 +44,11 @@ next-env.d.ts
 # Design and PRD
 stitch_specs
 /database/
+!/database/
+/database/*
+!/database/proposals/
+/database/proposals/*
+!/database/proposals/*.md
 Document/
 AGENTS.md
 CLAUDE.md
