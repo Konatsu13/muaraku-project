@@ -115,11 +115,21 @@ begin
     raise exception 'An active signed-in account is required';
   end if;
 
-  select m, c.kind into target_message, target_conversation_kind
-  from public.messages m
-  join public.conversations c on c.id = m.conversation_id
-  where m.id = p_message_id
-  for update of m;
+select m.*
+into target_message
+from public.messages m
+join public.conversations c on c.id = m.conversation_id
+where m.id = p_message_id
+for update of m;
+
+target_conversation_kind := null;
+
+if found then
+  select c.kind
+  into target_conversation_kind
+  from public.conversations c
+  where c.id = target_message.conversation_id;
+end if;
 
   if not found
      or target_message.sender_id is distinct from auth.uid()
