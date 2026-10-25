@@ -7,6 +7,7 @@
  * used; in production it must be the deployed domain (never localhost).
  */
 
+export const PRODUCTION_SITE_URL = "https://muaraku.id";
 export const DEFAULT_POST_LOGIN_PATH = "/app";
 
 const ALLOWED_REDIRECT_PREFIXES = [
@@ -24,18 +25,80 @@ function stripTrailingSlash(value: string): string {
 
 /**
  * Returns the configured public origin, or the current browser origin during
- * local development. Returns an empty string on the server when the variable
- * is not configured so callers can fall back to the request origin.
+ * local development. Guarantees that production never resolves to localhost.
  */
 export function getSiteUrl(): string {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (configured) return stripTrailingSlash(configured);
 
   if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    // Local development in browser
+    if (host === "localhost" || host === "127.0.0.1") {
+      return window.location.origin;
+    }
+    // Production custom domain in browser
+    if (host === "muaraku.id" || host.endsWith(".muaraku.id")) {
+      return window.location.origin;
+    }
+    // If configured explicitly and not pointing to localhost while running outside localhost
+    if (configured && !configured.includes("localhost") && !configured.includes("127.0.0.1")) {
+      return stripTrailingSlash(configured);
+    }
     return window.location.origin;
   }
 
-  return "";
+  // Server-side
+  if (configured) {
+    if (
+      process.env.NODE_ENV === "production" &&
+      (configured.includes("localhost") || configured.includes("127.0.0.1"))
+    ) {
+      return PRODUCTION_SITE_URL;
+    }
+    return stripTrailingSlash(configured);
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return PRODUCTION_SITE_URL;
+  }
+
+  return "http://localhost:3000";
+}
+
+/**
+ * Resolves the public base origin from an incoming server-side request,
+ * taking into account reverse proxy headers (e.g. Vercel, Cloudflare, Nginx).
+ */
+export function resolveRequestOrigin(request: Request): string {
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+
+  if (forwardedHost) {
+    const host = forwardedHost.split(",")[0].trim();
+    if (host) {
+      return `${forwardedProto}://${host}`;
+    }
+  }
+
+  const hostHeader = request.headers.get("host");
+  if (hostHeader && !hostHeader.includes("localhost") && !hostHeader.includes("127.0.0.1")) {
+    const proto = hostHeader.startsWith("localhost") ? "http" : "https";
+    return `${proto}://${hostHeader}`;
+  }
+
+  const siteUrl = getSiteUrl();
+  if (siteUrl) return siteUrl;
+
+  try {
+    const parsed = new URL(request.url);
+    if (parsed.origin && !parsed.origin.includes("localhost") && !parsed.origin.includes("127.0.0.1")) {
+      return parsed.origin;
+    }
+  } catch {
+    // ignore
+  }
+
+  return process.env.NODE_ENV === "production" ? PRODUCTION_SITE_URL : "http://localhost:3000";
 }
 
 /**
