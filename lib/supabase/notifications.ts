@@ -30,6 +30,20 @@ export interface NotificationItem {
   created_at: string;
 }
 
+export interface NotificationPreferences {
+  notify_in_app_messages: boolean;
+  notify_in_app_matches: boolean;
+  notify_in_app_claim_updates: boolean;
+  notify_in_app_moderation_updates: boolean;
+  notify_email_messages: boolean;
+  notify_email_matches: boolean;
+  notify_email_claim_updates: boolean;
+  notify_email_moderation_updates: boolean;
+}
+
+const PREFERENCE_COLUMNS =
+  "notify_in_app_messages, notify_in_app_matches, notify_in_app_claim_updates, notify_in_app_moderation_updates, notify_email_messages, notify_email_matches, notify_email_claim_updates, notify_email_moderation_updates";
+
 export async function fetchNotifications(limit = 50): Promise<{
   data: NotificationItem[];
   unreadCount: number;
@@ -76,27 +90,131 @@ export async function fetchNotifications(limit = 50): Promise<{
 }
 
 /**
- * Mark the current user's unread notifications as read through a server route.
- * The schema grants `update (read_at)` but declares no UPDATE RLS policy, so the
- * route verifies the session and filters by recipient_user_id on the server.
+ * Attempt a user-scoped mark-as-read through RLS.
+ *
+ * The schema grants `update (read_at)` to authenticated users but declares no
+ * UPDATE row-level policy for `public.notifications`, so this may legitimately
+ * affect zero rows. We report that honestly instead of bypassing RLS with a
+ * service-role key. A migration proposal is documented separately.
  */
 export async function markAllNotificationsRead(): Promise<{
   updated: number;
   error: Error | null;
 }> {
-  try {
-    const res = await fetch("/api/notifications/read", { method: "POST" });
-    const payload = (await res.json().catch(() => null)) as
-      | { updated?: number; error?: string }
-      | null;
+  const supabase = createClient();
 
-    if (!res.ok) {
-      return { updated: 0, error: new Error(payload?.error || "Gagal menandai notifikasi") };
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { updated: 0, error: new Error("Sesi pengguna tidak ditemukan. Silakan masuk kembali.") };
     }
 
-    return { updated: payload?.updated || 0, error: null };
+    const { data, error } = await supabase
+      .from("notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("recipient_user_id", user.id)
+      .is("read_at", null)
+      .select("id");
+
+    if (error) {
+      return { updated: 0, error: new Error(error.message) };
+    }
+
+    const updated = (data || []).length;
+
+    if (updated === 0) {
+      return {
+        updated: 0,
+        error: new Error(
+          "Status baca tidak dapat disimpan karena kebijakan database belum mengizinkan pembaruan notifikasi. Notifikasi tetap ditandai belum dibaca."
+        ),
+      };
+    }
+
+    return { updated, error: null };
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error("Gagal menandai notifikasi");
     return { updated: 0, error };
+  }
+}
+
+export async function fetchNotificationPreferences(): Promise<{
+  data: NotificationPreferences | null;
+  error: Error | null;
+}> {
+  const supabase = createClient();
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { data: null, error: new Error("Sesi pengguna tidak ditemukan. Silakan masuk kembali.") };
+    }
+
+    const { data, error } = await supabase
+      .from("user_account_controls")
+      .select(PREFERENCE_COLUMNS)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    if (!data) {
+      return { data: null, error: null };
+    }
+
+    return { data: data as NotificationPreferences, error: null };
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error("Gagal memuat preferensi notifikasi");
+    return { data: null, error };
+  }
+}
+
+export async function updateNotificationPreferences(
+  patch: Partial<NotificationPreferences>
+): Promise<{ success: boolean; error: Error | null }> {
+  const supabase = createClient();
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: new Error("Sesi pengguna tidak ditemukan. Silakan masuk kembali.") };
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return { success: true, error: null };
+    }
+
+    const { data, error } = await supabase
+      .from("user_account_controls")
+      .update(patch)
+      .eq("user_id", user.id)
+      .select("user_id");
+
+    if (error) {
+      return { success: false, error: new Error(error.message) };
+    }
+
+    if (!data || data.length === 0) {
+      return {
+        success: false,
+        error: new Error("Preferensi tidak tersimpan. Pastikan akun Anda aktif dan coba lagi."),
+      };
+    }
+
+    return { success: true, error: null };
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error("Gagal menyimpan preferensi notifikasi");
+    return { success: false, error };
   }
 }

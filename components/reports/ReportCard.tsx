@@ -11,6 +11,7 @@ import {
   Search,
 } from "lucide-react";
 import { ReportDetailItem, toggleSaveReport } from "@/lib/supabase/reports";
+import { formatOccurredAt } from "@/lib/reports/occurred-at";
 
 export type ReportItem = ReportDetailItem;
 
@@ -46,9 +47,12 @@ export const ReportCard = React.memo(function ReportCard({ report, onSavedChange
   };
 
   const formattedDate = (() => {
-    const d = report.occurred_at || report.created_at;
+    if (report.occurred_at) {
+      const formatted = formatOccurredAt(report.occurred_at, report.item_attributes);
+      return formatted.time ? `${formatted.date} · ${formatted.time}` : formatted.date;
+    }
     try {
-      return new Date(d).toLocaleDateString("id-ID", {
+      return new Date(report.created_at).toLocaleDateString("id-ID", {
         day: "numeric",
         month: "short",
         year: "numeric",

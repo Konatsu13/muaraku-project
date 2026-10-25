@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import {
   ArrowLeft,
+  Ban,
   Flag,
   Loader2,
   MessageSquare,
@@ -15,9 +16,12 @@ import {
 import {
   ChatMessage,
   ConversationSummary,
+  blockUser,
+  fetchBlockedUserIds,
   fetchConversationMessages,
   fetchConversations,
   sendConversationMessage,
+  unblockUser,
 } from "@/lib/supabase/messages";
 import { EmptyPattern } from "@/components/ui/patterns/EmptyPattern";
 import { ErrorPattern } from "@/components/ui/patterns/ErrorPattern";
@@ -57,12 +61,36 @@ export default function MessagesPage() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [reportTarget, setReportTarget] = useState<{ id: string; preview: string } | null>(null);
+  const [userReportTarget, setUserReportTarget] = useState<string | null>(null);
+
+  const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set());
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [blockError, setBlockError] = useState<string | null>(null);
+  const [confirmBlock, setConfirmBlock] = useState(false);
 
   const [listReloadKey, setListReloadKey] = useState(0);
   const [threadReloadKey, setThreadReloadKey] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const activeConversation = conversations.find((c) => c.id === activeId) || null;
+  const partnerUserId = activeConversation?.partner_user_id || null;
+  const partnerBlocked = partnerUserId ? blockedIds.has(partnerUserId) : false;
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    fetchBlockedUserIds().then((res) => {
+      if (cancelled) return;
+      if (res.error) {
+        setBlockError(res.error.message);
+        return;
+      }
+      setBlockedIds(res.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +111,18 @@ export default function MessagesPage() {
             ? current
             : null
         );
+
+        // Support deep links from a report page: /app/messages?conversation=<id>
+        if (typeof window !== "undefined") {
+          const requested = new URLSearchParams(window.location.search).get("conversation");
+          if (requested && res.data.some((conversation) => conversation.id === requested)) {
+            setActiveId(requested);
+            setLoadingThread(true);
+            const url = new URL(window.location.href);
+            url.searchParams.delete("conversation");
+            window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+          }
+        }
       }
       setLoadingList(false);
     };
@@ -190,6 +230,38 @@ export default function MessagesPage() {
     setActiveId(null);
     setMessages([]);
     setSendError(null);
+    setBlockError(null);
+    setConfirmBlock(false);
+  };
+
+  const handleBlockToggle = async () => {
+    if (!partnerUserId || blockBusy) return;
+    setBlockBusy(true);
+    setBlockError(null);
+
+    if (partnerBlocked) {
+      const res = await unblockUser(partnerUserId);
+      if (res.error) {
+        setBlockError(res.error.message);
+      } else {
+        setBlockedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(partnerUserId);
+          return next;
+        });
+        setConfirmBlock(false);
+      }
+    } else {
+      const res = await blockUser(partnerUserId);
+      if (res.error) {
+        setBlockError(res.error.message);
+      } else {
+        setBlockedIds((prev) => new Set(prev).add(partnerUserId));
+        setConfirmBlock(false);
+      }
+    }
+
+    setBlockBusy(false);
   };
 
   return (
@@ -354,15 +426,79 @@ export default function MessagesPage() {
                   </div>
                 </div>
 
-                <button
-                  onClick={handleRefreshThread}
-                  title="Muat ulang pesan"
-                  aria-label="Muat ulang pesan"
-                  className="p-2 rounded-lg text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1">
+                  {partnerUserId && (
+                    <>
+                      <button
+                        onClick={() => setUserReportTarget(partnerUserId)}
+                        title="Laporkan pengguna ini"
+                        aria-label="Laporkan pengguna ini"
+                        className="p-2 rounded-lg text-zinc-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                      >
+                        <Flag className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setConfirmBlock((value) => !value)}
+                        title={partnerBlocked ? "Buka blokir pengguna" : "Blokir pengguna"}
+                        aria-label={partnerBlocked ? "Buka blokir pengguna" : "Blokir pengguna"}
+                        aria-pressed={partnerBlocked}
+                        className={`p-2 rounded-lg transition-colors ${
+                          partnerBlocked
+                            ? "text-rose-600 bg-rose-50 dark:bg-rose-950/40"
+                            : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        }`}
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={handleRefreshThread}
+                    title="Muat ulang pesan"
+                    aria-label="Muat ulang pesan"
+                    className="p-2 rounded-lg text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
+
+              {(blockError || confirmBlock) && (
+                <div className="px-3 sm:px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-[11px] space-y-2">
+                  {blockError && (
+                    <p className="text-rose-600 dark:text-rose-400 flex items-start gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <span>{blockError}</span>
+                    </p>
+                  )}
+                  {confirmBlock && !blockError && (
+                    <>
+                      <p className="text-zinc-600 dark:text-zinc-400">
+                        {partnerBlocked
+                          ? "Buka blokir pengguna ini? Kalian dapat mengirim pesan lagi setelah blokir dibuka."
+                          : "Blokir pengguna ini? Kalian tidak dapat saling mengirim pesan selama blokir aktif."}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleBlockToggle}
+                          disabled={blockBusy}
+                          className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          {blockBusy && <Loader2 className="w-3 h-3 animate-spin" />}
+                          <span>{partnerBlocked ? "Buka Blokir" : "Blokir"}</span>
+                        </button>
+                        <button
+                          onClick={() => setConfirmBlock(false)}
+                          disabled={blockBusy}
+                          className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800"
+                        >
+                          Batal
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               <div className="flex-1 overflow-y-auto custom-scrollbar px-3 sm:px-5 py-4 space-y-3 bg-zinc-50/40 dark:bg-[#18181B]">
                 {loadingThread ? (
@@ -448,6 +584,13 @@ export default function MessagesPage() {
                   </p>
                 )}
 
+                {partnerBlocked && (
+                  <p className="mb-2 text-[11px] text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+                    <Ban className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Anda memblokir pengguna ini. Buka blokir untuk mengirim pesan.</span>
+                  </p>
+                )}
+
                 <div className="flex items-end gap-2">
                   <textarea
                     rows={1}
@@ -460,12 +603,17 @@ export default function MessagesPage() {
                       }
                     }}
                     maxLength={5000}
-                    placeholder="Tulis pesan yang sopan..."
-                    className="flex-1 px-3 py-2.5 max-h-28 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-orange-500 resize-none"
+                    disabled={partnerBlocked}
+                    placeholder={
+                      partnerBlocked
+                        ? "Blokir aktif — pesan tidak dapat dikirim"
+                        : "Tulis pesan yang sopan..."
+                    }
+                    className="flex-1 px-3 py-2.5 max-h-28 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-orange-500 resize-none disabled:opacity-60"
                   />
                   <button
                     type="submit"
-                    disabled={sending || !composer.trim()}
+                    disabled={sending || partnerBlocked || !composer.trim()}
                     className="h-11 w-11 flex items-center justify-center rounded-xl bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-40 transition-colors flex-shrink-0"
                     aria-label="Kirim pesan"
                   >
@@ -501,6 +649,16 @@ export default function MessagesPage() {
           targetType="message"
           targetId={reportTarget.id}
           targetTitle={`Pesan: "${reportTarget.preview}..."`}
+        />
+      )}
+
+      {user && userReportTarget && (
+        <SafetyReportModal
+          isOpen={Boolean(userReportTarget)}
+          onClose={() => setUserReportTarget(null)}
+          targetType="user"
+          targetId={userReportTarget}
+          targetTitle={activeConversation?.partner_name}
         />
       )}
     </div>

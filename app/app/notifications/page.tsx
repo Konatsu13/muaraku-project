@@ -8,16 +8,21 @@ import {
   Check,
   CheckCircle2,
   Loader2,
+  Mail,
   MessageSquare,
   RefreshCw,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
 } from "lucide-react";
 import {
+  fetchNotificationPreferences,
   fetchNotifications,
   markAllNotificationsRead,
   NotificationItem,
+  NotificationPreferences,
   NotificationType,
+  updateNotificationPreferences,
 } from "@/lib/supabase/notifications";
 import { EmptyPattern } from "@/components/ui/patterns/EmptyPattern";
 import { ErrorPattern } from "@/components/ui/patterns/ErrorPattern";
@@ -89,6 +94,50 @@ function NotificationIcon({ type }: { type: NotificationType }) {
   }
 }
 
+const PREFERENCE_LABELS: Array<{
+  key: keyof NotificationPreferences;
+  label: string;
+  channel: "in_app" | "email";
+}> = [
+  { key: "notify_in_app_messages", label: "Pesan baru", channel: "in_app" },
+  { key: "notify_in_app_matches", label: "Kemungkinan kecocokan", channel: "in_app" },
+  { key: "notify_in_app_claim_updates", label: "Pembaruan klaim", channel: "in_app" },
+  { key: "notify_in_app_moderation_updates", label: "Pembaruan moderasi", channel: "in_app" },
+  { key: "notify_email_messages", label: "Pesan baru", channel: "email" },
+  { key: "notify_email_matches", label: "Kemungkinan kecocokan", channel: "email" },
+  { key: "notify_email_claim_updates", label: "Pembaruan klaim", channel: "email" },
+  { key: "notify_email_moderation_updates", label: "Pembaruan moderasi", channel: "email" },
+];
+
+function PreferenceToggle({
+  checked,
+  disabled,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  label: string;
+  onChange: () => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-3 py-1.5 cursor-pointer">
+      <span className="text-[11px] text-zinc-600 dark:text-zinc-400">{label}</span>
+      <span className="relative inline-flex items-center">
+        <input
+          type="checkbox"
+          className="peer sr-only"
+          checked={checked}
+          disabled={disabled}
+          onChange={onChange}
+        />
+        <span className="w-8 h-[18px] rounded-full bg-zinc-200 dark:bg-zinc-700 peer-checked:bg-orange-500 peer-focus-visible:ring-2 peer-focus-visible:ring-orange-500/40 peer-disabled:opacity-50 transition-colors" />
+        <span className="absolute left-0.5 w-3.5 h-3.5 rounded-full bg-white shadow-xs transition-transform peer-checked:translate-x-[14px]" />
+      </span>
+    </label>
+  );
+}
+
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [tab, setTab] = useState<"all" | "unread">("all");
@@ -96,6 +145,14 @@ export default function NotificationsPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [marking, setMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
+
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
+  const [preferencesLoading, setPreferencesLoading] = useState(false);
+  const [preferencesError, setPreferencesError] = useState<string | null>(null);
+  const [savingPreference, setSavingPreference] = useState<keyof NotificationPreferences | null>(
+    null
+  );
 
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -122,6 +179,53 @@ export default function NotificationsPage() {
       cancelled = true;
     };
   }, [reloadKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setPreferencesLoading(true);
+      const res = await fetchNotificationPreferences();
+      if (cancelled) return;
+
+      if (res.error) {
+        setPreferencesError(res.error.message);
+        setPreferences(null);
+      } else {
+        setPreferences(res.data);
+        setPreferencesError(
+          res.data ? null : "Preferensi notifikasi belum tersedia untuk akun ini."
+        );
+      }
+      setPreferencesLoading(false);
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleTogglePreference = async (key: keyof NotificationPreferences) => {
+    if (!preferences || savingPreference) return;
+
+    const nextValue = !preferences[key];
+    const previous = preferences;
+
+    setPreferences({ ...preferences, [key]: nextValue });
+    setSavingPreference(key);
+    setPreferencesError(null);
+
+    const res = await updateNotificationPreferences({ [key]: nextValue });
+
+    if (res.error) {
+      setPreferences(previous);
+      setPreferencesError(res.error.message);
+    }
+
+    setSavingPreference(null);
+  };
 
   const unreadCount = notifications.filter((item) => !item.read_at).length;
   const visibleNotifications =
@@ -169,6 +273,20 @@ export default function NotificationsPage() {
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <button
+            onClick={() => setShowPreferences((value) => !value)}
+            aria-expanded={showPreferences}
+            aria-controls="notification-preferences"
+            title="Preferensi notifikasi"
+            className={`p-2.5 rounded-xl border transition-colors ${
+              showPreferences
+                ? "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300"
+                : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+            }`}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+          </button>
+
+          <button
             onClick={handleRefresh}
             title="Muat ulang notifikasi"
             aria-label="Muat ulang notifikasi"
@@ -193,6 +311,85 @@ export default function NotificationsPage() {
           )}
         </div>
       </div>
+
+      {showPreferences && (
+        <section
+          id="notification-preferences"
+          className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#121214] p-4 sm:p-5 space-y-4"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                Preferensi Notifikasi
+              </h2>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Atur kanal pemberitahuan yang ingin Anda terima. Perubahan disimpan langsung ke akun Anda.
+              </p>
+            </div>
+            {preferencesLoading && (
+              <Loader2 className="w-4 h-4 animate-spin text-orange-500 flex-shrink-0" />
+            )}
+          </div>
+
+          {preferencesError && (
+            <p className="text-[11px] text-rose-600 dark:text-rose-400 flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+              <span>{preferencesError}</span>
+            </p>
+          )}
+
+          {preferences ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Bell className="w-3.5 h-3.5 text-orange-500" />
+                  <span className="text-[11px] font-semibold text-zinc-800 dark:text-zinc-200">
+                    Di aplikasi
+                  </span>
+                </div>
+                <div className="divide-y divide-zinc-100 dark:divide-zinc-800/70">
+                  {PREFERENCE_LABELS.filter((item) => item.channel === "in_app").map((item) => (
+                    <PreferenceToggle
+                      key={item.key}
+                      label={item.label}
+                      checked={preferences[item.key]}
+                      disabled={savingPreference !== null}
+                      onChange={() => handleTogglePreference(item.key)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Mail className="w-3.5 h-3.5 text-orange-500" />
+                  <span className="text-[11px] font-semibold text-zinc-800 dark:text-zinc-200">
+                    Email
+                  </span>
+                </div>
+                <div className="divide-y divide-zinc-100 dark:divide-zinc-800/70">
+                  {PREFERENCE_LABELS.filter((item) => item.channel === "email").map((item) => (
+                    <PreferenceToggle
+                      key={item.key}
+                      label={item.label}
+                      checked={preferences[item.key]}
+                      disabled={savingPreference !== null}
+                      onChange={() => handleTogglePreference(item.key)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            !preferencesLoading &&
+            !preferencesError && (
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Preferensi notifikasi belum tersedia untuk akun ini.
+              </p>
+            )
+          )}
+        </section>
+      )}
 
       <div className="flex items-center gap-1 border-b border-zinc-200 dark:border-zinc-800">
         <button

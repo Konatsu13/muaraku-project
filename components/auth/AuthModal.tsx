@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
+import { getAuthCallbackUrl, sanitizeNextPath } from "@/lib/config/site";
 import { TurnstileWidget } from "@/components/auth/TurnstileWidget";
 import {
   X,
@@ -29,13 +30,7 @@ export function AuthModal() {
   const supabase = createClient();
   const termsCheckboxId = useId();
 
-  const getSafeReturnUrl = () => {
-    const next = searchParams.get("next");
-    if (next && next.startsWith("/") && !next.startsWith("//")) {
-      return next;
-    }
-    return "/app";
-  };
+  const getSafeReturnUrl = () => sanitizeNextPath(searchParams.get("next"));
 
   const [email, setEmail] = useState("");
   const [prevPendingEmail, setPrevPendingEmail] = useState<string | null>(null);
@@ -177,7 +172,7 @@ export function AuthModal() {
     setOauthLoading(true);
     try {
       const destination = getSafeReturnUrl();
-      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(destination)}`;
+      const redirectTo = getAuthCallbackUrl(destination);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -361,7 +356,7 @@ export function AuthModal() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-        redirectTo: `${window.location.origin}/auth/callback?next=/app/profile`,
+        redirectTo: getAuthCallbackUrl("/app/profile"),
         captchaToken: activeTurnstileToken || undefined,
       });
 

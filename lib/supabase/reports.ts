@@ -68,6 +68,7 @@ export interface CreateReportInput {
   color?: string | null;
   brand?: string | null;
   model?: string | null;
+  item_attributes?: Record<string, unknown>;
   private_description?: string | null;
   owner_only_clues?: string | null;
   private_location_note?: string | null;
@@ -85,6 +86,7 @@ export interface UpdateReportInput {
   color?: string | null;
   brand?: string | null;
   model?: string | null;
+  item_attributes?: Record<string, unknown>;
   case_status?: "open" | "match_pending" | "claim_in_progress" | "returned" | "closed";
 }
 
@@ -675,6 +677,12 @@ export async function fetchReportById(reportId: string): Promise<{
 /**
  * Create a new lost or found report with media upload and private details.
  */
+const ALLOWED_REPORT_IMAGE_TYPES: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
 export async function createReport(
   input: CreateReportInput,
   files?: File[]
@@ -700,6 +708,22 @@ export async function createReport(
     return { data: null, error: new Error("Deskripsi laporan harus memiliki panjang antara 5 dan 5000 karakter") };
   }
 
+  if (!input.category_id) {
+    return { data: null, error: new Error("Kategori laporan wajib dipilih") };
+  }
+
+  if (!input.occurred_at) {
+    return { data: null, error: new Error("Tanggal kejadian wajib diisi") };
+  }
+
+  if (!input.location_label || !input.location_label.trim()) {
+    return { data: null, error: new Error("Lokasi kejadian wajib diisi") };
+  }
+
+  if (!input.city || !input.city.trim()) {
+    return { data: null, error: new Error("Kota kejadian wajib diisi") };
+  }
+
   if (input.location_label && input.location_label.length > 200) {
     return { data: null, error: new Error("Label lokasi maksimal 200 karakter") };
   }
@@ -708,7 +732,16 @@ export async function createReport(
     return { data: null, error: new Error("Nama kota maksimal 100 karakter") };
   }
 
+  if (files) {
+    for (const file of files) {
+      if (!ALLOWED_REPORT_IMAGE_TYPES[file.type]) {
+        return { data: null, error: new Error(`Format berkas "${file.name}" harus JPG, PNG, atau WEBP`) };
+      }
+    }
+  }
+
   const uploadedStoragePaths: string[] = [];
+  let createdReportId: string | null = null;
 
   try {
     // 1. Insert into reports (relying on table defaults for case_status and moderation_status)
@@ -719,13 +752,14 @@ export async function createReport(
         report_type: input.report_type,
         title: trimmedTitle,
         description: trimmedDesc,
-        category_id: input.category_id || null,
-        location_label: input.location_label?.trim() || null,
-        city: input.city?.trim() || null,
-        occurred_at: input.occurred_at || new Date().toISOString(),
+        category_id: input.category_id,
+        location_label: input.location_label.trim(),
+        city: input.city.trim(),
+        occurred_at: input.occurred_at,
         color: input.color?.trim() || null,
         brand: input.brand?.trim() || null,
         model: input.model?.trim() || null,
+        item_attributes: input.item_attributes || {},
       })
       .select()
       .single();
@@ -735,6 +769,7 @@ export async function createReport(
     }
 
     const reportId = newReport.id;
+    createdReportId = reportId;
 
     // 2. Insert into report_private_details if provided
     const hasPrivateDetails =
@@ -754,7 +789,7 @@ export async function createReport(
       });
 
       if (privateError) {
-        console.error("Warning: Failed to save private details:", privateError.message);
+        throw new Error(`Gagal menyimpan ciri rahasia laporan: ${privateError.message}`);
       }
     }
 
@@ -766,7 +801,11 @@ export async function createReport(
           throw new Error(`Ukuran file "${file.name}" melebihi batas 8MB`);
         }
 
-        const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+        const ext = ALLOWED_REPORT_IMAGE_TYPES[file.type];
+        if (!ext) {
+          throw new Error(`Format file "${file.name}" harus JPG, PNG, atau WEBP`);
+        }
+
         const cleanName = `${Date.now()}_${i}.${ext}`;
         // Bucket policy convention: <auth.uid()>/<report_id>/<filename>
         const storagePath = `${user.id}/${reportId}/${cleanName}`;
@@ -803,6 +842,17 @@ export async function createReport(
     const detail = await fetchReportById(reportId);
     return { data: detail.data, error: null };
   } catch (err: unknown) {
+    // Remove the partial report row when a later step failed. The owner delete
+    // path may itself be blocked by RLS; report that honestly instead of
+    // pretending the whole operation succeeded.
+    if (createdReportId) {
+      try {
+        await supabase.from("reports").delete().eq("id", createdReportId);
+      } catch (cleanupErr) {
+        console.error("Report cleanup after failed create:", cleanupErr);
+      }
+    }
+
     // Rollback uploaded files if any
     if (uploadedStoragePaths.length > 0) {
       try {
@@ -838,15 +888,56 @@ export async function updateReport(
       updated_at: new Date().toISOString(),
     };
 
-    if (updates.title !== undefined) updatePayload.title = updates.title.trim();
-    if (updates.description !== undefined) updatePayload.description = updates.description.trim();
-    if (updates.category_id !== undefined) updatePayload.category_id = updates.category_id;
-    if (updates.location_label !== undefined) updatePayload.location_label = updates.location_label?.trim() || null;
-    if (updates.city !== undefined) updatePayload.city = updates.city?.trim() || null;
-    if (updates.occurred_at !== undefined) updatePayload.occurred_at = updates.occurred_at;
+    if (updates.title !== undefined) {
+      const trimmedTitle = updates.title.trim();
+      if (trimmedTitle.length < 3 || trimmedTitle.length > 140) {
+        return { success: false, error: new Error("Judul laporan harus memiliki panjang antara 3 dan 140 karakter") };
+      }
+      updatePayload.title = trimmedTitle;
+    }
+    if (updates.description !== undefined) {
+      const trimmedDesc = updates.description.trim();
+      if (trimmedDesc.length < 5 || trimmedDesc.length > 5000) {
+        return { success: false, error: new Error("Deskripsi laporan harus memiliki panjang antara 5 dan 5000 karakter") };
+      }
+      updatePayload.description = trimmedDesc;
+    }
+    if (updates.category_id !== undefined) {
+      if (!updates.category_id) {
+        return { success: false, error: new Error("Kategori laporan wajib dipilih") };
+      }
+      updatePayload.category_id = updates.category_id;
+    }
+    if (updates.location_label !== undefined) {
+      const trimmedLocation = updates.location_label?.trim() || "";
+      if (!trimmedLocation) {
+        return { success: false, error: new Error("Lokasi kejadian wajib diisi") };
+      }
+      if (trimmedLocation.length > 200) {
+        return { success: false, error: new Error("Label lokasi maksimal 200 karakter") };
+      }
+      updatePayload.location_label = trimmedLocation;
+    }
+    if (updates.city !== undefined) {
+      const trimmedCity = updates.city?.trim() || "";
+      if (!trimmedCity) {
+        return { success: false, error: new Error("Kota kejadian wajib diisi") };
+      }
+      if (trimmedCity.length > 100) {
+        return { success: false, error: new Error("Nama kota maksimal 100 karakter") };
+      }
+      updatePayload.city = trimmedCity;
+    }
+    if (updates.occurred_at !== undefined) {
+      if (!updates.occurred_at) {
+        return { success: false, error: new Error("Tanggal kejadian wajib diisi") };
+      }
+      updatePayload.occurred_at = updates.occurred_at;
+    }
     if (updates.color !== undefined) updatePayload.color = updates.color?.trim() || null;
     if (updates.brand !== undefined) updatePayload.brand = updates.brand?.trim() || null;
     if (updates.model !== undefined) updatePayload.model = updates.model?.trim() || null;
+    if (updates.item_attributes !== undefined) updatePayload.item_attributes = updates.item_attributes;
     if (updates.case_status !== undefined) {
       updatePayload.case_status = updates.case_status;
       if (updates.case_status === "closed") {
@@ -880,7 +971,10 @@ export async function updateReport(
         });
 
       if (pErr) {
-        console.error("Warning: private details update error:", pErr.message);
+        return {
+          success: false,
+          error: new Error(`Laporan tersimpan, tetapi ciri rahasia gagal diperbarui: ${pErr.message}`),
+        };
       }
     }
 

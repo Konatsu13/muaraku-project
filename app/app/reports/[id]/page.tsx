@@ -15,6 +15,8 @@ import {
 } from "@/lib/supabase/reports";
 import { ReportModal } from "@/components/reports/ReportModal";
 import { ClaimModal } from "@/components/reports/ClaimModal";
+import { formatOccurredAt } from "@/lib/reports/occurred-at";
+import { createDirectConversation } from "@/lib/supabase/messages";
 import { LoadingPattern } from "@/components/ui/patterns/LoadingPattern";
 import { ErrorPattern } from "@/components/ui/patterns/ErrorPattern";
 import {
@@ -30,10 +32,10 @@ import {
   ShieldCheck,
   Package,
   Search,
-  User,
   ExternalLink,
   MessageSquare,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
 
 export default function ReportDetailPage({
@@ -59,6 +61,8 @@ export default function ReportDetailPage({
   const [copiedLink, setCopiedLink] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [contacting, setContacting] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
 
   const loadReport = useCallback(async (isCancelledRef?: { current: boolean }) => {
     if (isCancelledRef?.current) return;
@@ -139,6 +143,22 @@ export default function ReportDetailPage({
     setUpdatingStatus(false);
   };
 
+  const handleContact = async () => {
+    if (!report || !user || contacting) return;
+    setContacting(true);
+    setContactError(null);
+
+    const res = await createDirectConversation(report.reporter_user_id, report.id);
+    if (res.error || !res.conversationId) {
+      setContactError(res.error?.message || "Percakapan tidak dapat dibuat.");
+      setContacting(false);
+      return;
+    }
+
+    router.push(`/app/messages?conversation=${res.conversationId}`);
+    setContacting(false);
+  };
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto py-8">
@@ -158,16 +178,14 @@ export default function ReportDetailPage({
     );
   }
 
-  const formattedOccurred = report.occurred_at
-    ? new Date(report.occurred_at).toLocaleDateString("id-ID", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "-";
+  const formattedOccurred = (() => {
+    if (!report.occurred_at) return "-";
+    const formatted = formatOccurredAt(report.occurred_at, report.item_attributes);
+    const datePart = formatted.weekday
+      ? `${formatted.weekday}, ${formatted.date}`
+      : formatted.date;
+    return formatted.time ? `${datePart} · ${formatted.time}` : datePart;
+  })();
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-fade-in pb-12">
@@ -422,6 +440,33 @@ export default function ReportDetailPage({
             ) : (
               <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-xs text-zinc-600 dark:text-zinc-400">
                 Punya informasi barang ini? Hubungi pelapor melalui pusat pesan atau laporkan temuan yang cocok.
+              </div>
+            )}
+
+            {!isOwner && user && report.moderation_status === "approved" && (
+              <div className="space-y-2">
+                <button
+                  onClick={handleContact}
+                  disabled={contacting}
+                  className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold border border-orange-500/40 text-orange-700 dark:text-orange-300 bg-orange-500/10 hover:bg-orange-500/15 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+                >
+                  {contacting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <MessageSquare className="w-4 h-4" />
+                  )}
+                  <span>Hubungi {isLost ? "Pelapor" : "Penemu"} Barang</span>
+                </button>
+                {contactError && (
+                  <p className="text-[11px] text-rose-600 dark:text-rose-400 flex items-start gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                    <span>{contactError}</span>
+                  </p>
+                )}
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                  Percakapan privat dibuat melalui sistem MuaraKu. Jangan meminta atau
+                  mengirim tebusan di luar aplikasi.
+                </p>
               </div>
             )}
           </div>

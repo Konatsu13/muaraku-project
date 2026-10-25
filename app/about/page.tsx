@@ -4,9 +4,68 @@ import React from "react";
 import Link from "next/link";
 import { PublicNavbar } from "@/components/public/PublicNavbar";
 import { PublicFooter } from "@/components/public/PublicFooter";
-import { ShieldCheck, ArrowRight, Heart, Sparkles, HelpCircle } from "lucide-react";
+import { ShieldCheck, ArrowRight, Heart, Sparkles, HelpCircle, Users, ExternalLink } from "lucide-react";
+import {
+  getCompleteDevelopers,
+  isSafeSocialUrl,
+  type DeveloperProfile,
+} from "@/lib/config/developers";
+
+function DeveloperCard({ developer }: { developer: DeveloperProfile }) {
+  return (
+    <article className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-3">
+      <div className="flex items-center gap-3">
+        {developer.photo ? (
+          <img
+            src={developer.photo}
+            alt={`Foto ${developer.name}`}
+            className="w-12 h-12 rounded-full object-cover border border-zinc-200 dark:border-zinc-700"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 dark:text-zinc-400">
+            <Users className="w-5 h-5" />
+          </div>
+        )}
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
+            {developer.name}
+          </h3>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{developer.role}</p>
+        </div>
+      </div>
+
+      {(isSafeSocialUrl(developer.linkedinUrl) || isSafeSocialUrl(developer.instagramUrl)) && (
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          {isSafeSocialUrl(developer.linkedinUrl) && (
+            <a
+              href={developer.linkedinUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-orange-600 dark:text-orange-400 hover:underline"
+            >
+              LinkedIn <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+          {isSafeSocialUrl(developer.instagramUrl) && (
+            <a
+              href={developer.instagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-orange-600 dark:text-orange-400 hover:underline"
+            >
+              Instagram <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+        </div>
+      )}
+    </article>
+  );
+}
 
 export default function AboutPage() {
+  const team = getCompleteDevelopers();
+
   return (
     <div className="min-h-screen flex flex-col bg-[#FFFCF8] dark:bg-[#18181B] transition-colors">
       <PublicNavbar />
@@ -87,6 +146,41 @@ export default function AboutPage() {
               </div>
             </div>
           </div>
+
+          {/* Section: Tim Developer */}
+          <section className="space-y-5">
+            <div>
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+                Tim di Balik MuaraKu
+              </h2>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed mt-1 max-w-2xl">
+                MuaraKu dikembangkan oleh tim kecil yang peduli pada keamanan pertemuan
+                barang hilang. Profil hanya ditampilkan setelah nama, peran, dan foto
+                dikonfirmasi oleh pemiliknya.
+              </p>
+            </div>
+
+            {team.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {team.map((developer) => (
+                  <DeveloperCard key={`${developer.name}-${developer.role}`} developer={developer} />
+                ))}
+              </div>
+            ) : (
+              <div className="p-6 sm:p-8 rounded-2xl bg-white dark:bg-zinc-900 border border-dashed border-zinc-300 dark:border-zinc-700 text-center">
+                <div className="w-11 h-11 mx-auto rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex items-center justify-center mb-3">
+                  <Users className="w-5 h-5" />
+                </div>
+                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+                  Profil tim belum dipublikasikan
+                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-md mx-auto leading-relaxed">
+                  Kami tidak menampilkan nama, foto, atau tautan yang belum dikonfirmasi.
+                  Informasi kontributor akan ditambahkan setelah data resmi tersedia.
+                </p>
+              </div>
+            )}
+          </section>
 
           {/* Section: CTA Navigasi */}
           <div className="pt-8 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-4">

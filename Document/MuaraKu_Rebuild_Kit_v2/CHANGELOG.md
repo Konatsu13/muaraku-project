@@ -1,5 +1,36 @@
 # Changelog — MuaraKu Rebuild Kit
 
+## 2026-10-25 — Sesi 4: Integrasi Login, Form Laporan, Chat, Notifikasi & Community Trust
+- **Redirect setelah login (`app/auth/callback/route.ts`, `components/auth/AuthModal.tsx`)**:
+  - Menambahkan [lib/config/site.ts](file:///d:/Codingan/muaraku-project/lib/config/site.ts) sebagai satu sumber `NEXT_PUBLIC_SITE_URL`, `getAuthCallbackUrl()`, dan `sanitizeNextPath()`.
+  - Callback OAuth memakai origin terkonfigurasi (fallback ke origin request, bukan `localhost` hardcoded) dan hanya menerima path internal di allowlist (`/app`, `/admin`, `/about`, `/support`, `/privacy`, `/terms`). Password login, OAuth, dan reset password memakai helper yang sama.
+  - Menghapus eskalasi admin hardcoded `fathan.pageraji@gmail.com`, route `app/api/auth/provision-admin/route.ts`, dan fallback tabel legacy `profiles`/`user_roles` dari [lib/auth/index.tsx](file:///d:/Codingan/muaraku-project/lib/auth/index.tsx). `updateProfile` kini mengembalikan error nyata.
+  - `.env.example` mendokumentasikan `NEXT_PUBLIC_SITE_URL` untuk lokal dan produksi.
+- **Dummy data runtime dihapus**:
+  - Menghapus `lib/data/sampleReports.ts` (tidak diimpor UI) dan tidak menambahkan seed pesan/notifikasi/pengguna palsu.
+  - Global Chat tidak lagi memakai embedding PostgREST `user_profiles:sender_id` yang tidak ada; profil dikirim lewat satu lookup batch. Klaim "Reset Harian 00:00 WIB", titik status online, badge "Petugas" palsu, dan copy "dibersihkan otomatis" dihapus. Empty state kini jujur: "Belum ada pesan".
+  - Halaman About tidak menampilkan profil developer palsu; [lib/config/developers.ts](file:///d:/Codingan/muaraku-project/lib/config/developers.ts) kosong dengan TODO dan empty state.
+- **Form laporan diselaraskan (`components/reports/ReportModal.tsx`, `lib/supabase/reports.ts`, `lib/reports/occurred-at.ts`)**:
+  - `report_type` ditentukan halaman/konteks, bukan toggle di form. Wajib: judul, kategori, tanggal kejadian, lokasi, kota, deskripsi publik. Opsional: waktu, foto, warna, merek, model, ciri rahasia, kontak privat.
+  - Tanggal saja disimpan sebagai UTC midnight dengan penanda `item_attributes.occurred_at_precision = "date"`; waktu opsional disimpan sebagai datetime. Render tanggal memakai UTC agar tidak bergeser.
+  - Validasi inline per kolom, validasi MIME foto (`image/jpeg`, `image/png`, `image/webp`), batas 8MB, dan kegagalan menyimpan `report_private_details` tidak lagi ditelan diam-diam. Laporan parsial dibersihkan bila pembuatan gagal.
+- **Direct chat berbasis RPC (`lib/supabase/messages.ts`, `app/app/messages/page.tsx`, `app/app/reports/[id]/page.tsx`)**:
+  - Menambahkan `partner_user_id`, helper `createDirectConversation()` yang memanggil `public.muaraku_create_direct_conversation(...)`, serta `blockUser()`, `unblockUser()`, dan `fetchBlockedUserIds()`.
+  - Tombol "Hubungi Pelapor/Penemu Barang" pada detail laporan membuat/memakai percakapan lewat RPC, lalu membuka thread via `/app/messages?conversation=<id>`.
+  - Thread privat mendapat aksi laporkan pengguna dan blokir/buka blokir dengan konfirmasi inline, status blokir yang jujur, serta composer yang dinonaktifkan saat blokir aktif.
+- **Notifikasi (`app/app/notifications/page.tsx`, `lib/supabase/notifications.ts`)**:
+  - Menambahkan panel preferensi in-app/email yang membaca dan memperbarui kolom `user_account_controls.notify_*` (satu-satunya kolom yang diizinkan schema untuk diubah pengguna).
+  - "Tandai dibaca" tidak lagi memakai `SUPABASE_SECRET_KEY` atau route service-role. Route `app/api/notifications/read/route.ts` dihapus; pembaruan dilakukan user-scoped dan bila RLS menolak, UI menampilkan kegagalan yang sebenarnya tanpa mengubah status lokal.
+- **Profil (`app/app/profile/page.tsx`)**: menghapus bio fallback palsu dan avatar path yang dirender sebagai URL publik; error simpan/laporan ditampilkan, bukan ditelan di console.
+- **Usulan migration (belum dijalankan)**: [supabase/proposals/2026-10-25_notifications_read_at_policy.sql](file:///d:/Codingan/muaraku-project/supabase/proposals/2026-10-25_notifications_read_at_policy.sql) menambahkan policy UPDATE recipient-scoped untuk `notifications.read_at`, beserta alasan, dampak, rollback, dan langkah verifikasi.
+- **Validasi**:
+  - `npx tsc --noEmit` -> **PASS** (0 error).
+  - `npm run build` -> **PASS** (21 rute; Next.js 16.3.7).
+  - `npm run lint` -> **FAIL**: 11 error `react-hooks/set-state-in-effect` yang sudah ada di `finder`, `app/page`, `profile`, `reports/[id]`, `search`, `seeker`, `ClaimModal`, dan `ReportModal`; tidak ada error baru dari file Sesi 4 (error efek sinkron di halaman pesan yang sempat muncul sudah dihapus).
+  - Uji integrasi database live -> **BLOCKED**: tidak ada dua akun uji/kredensial Supabase yang aman; tidak ada SQL/migrasi yang dijalankan.
+  - Mark-as-read -> **BLOCKED oleh RLS**: schema hanya punya SELECT policy untuk `notifications`, sehingga update user-scoped menghasilkan 0 baris sampai proposal migration disetujui.
+- **Risiko terbuka**: `scripts/test-sesi3-core.mjs` masih memuat service-role key dan kredensial hardcoded; script tidak dijalankan dan kredensial perlu dirotasi serta dipindahkan ke environment sebelum dipakai lagi.
+
 ## 2026-10-24 — Perbaikan UI Bottom Navbar Mobile
 - **Navbar tidak lagi `fixed` di luar alur halaman**:
   - `app/app/layout.tsx` kini memakai app shell `h-[100dvh] overflow-hidden`; header, konten, dan bottom nav berada dalam satu flex column. `main` menjadi satu-satunya area scroll (`overflow-y-auto` + `overscroll-contain`).

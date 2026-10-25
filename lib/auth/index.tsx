@@ -72,46 +72,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userRef.current = user;
   }, [user]);
 
-  const hasProvisionedAdminRef = useRef(false);
-
   const fetchProfileAndRoles = useCallback(
     async (userId: string, currentUser?: User | null) => {
       try {
-        // 1. Fetch profile: try canonical user_profiles, fallback to profiles
-        let foundProfile: UserProfile | null = null;
-
-        const { data: userProfileData } = await supabase
+        // 1. Fetch the canonical profile row. No legacy table fallbacks.
+        const { data: userProfileData, error: profileError } = await supabase
           .from("user_profiles")
           .select("*")
           .eq("user_id", userId)
           .maybeSingle();
 
-        if (userProfileData) {
-          foundProfile = userProfileData as UserProfile;
-        } else {
-          const { data: legacyProfile } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", userId)
-            .maybeSingle();
-
-          if (legacyProfile) {
-            foundProfile = {
-              user_id: legacyProfile.id,
-              username: legacyProfile.username,
-              display_name: legacyProfile.display_name || "Pengguna MuaraKu",
-              avatar_path: legacyProfile.avatar_path,
-              bio: "",
-              preferred_language: (legacyProfile.language as "id" | "en") || "id",
-              theme: (legacyProfile.theme as "light" | "dark" | "system") || "system",
-            };
-          }
+        if (profileError) {
+          console.error("Error fetching user profile:", profileError.message);
         }
 
-        if (foundProfile) {
-          setProfile(foundProfile);
+        if (userProfileData) {
+          setProfile(userProfileData as UserProfile);
         } else {
-          // Fallback default
+          // The signup trigger should create this row. If it is missing, show
+          // only non-invented identity data already present on the auth user.
           const activeUser = currentUser || userRef.current;
           const displayName =
             activeUser?.user_metadata?.display_name ||
@@ -130,41 +109,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
         }
 
-        // 2. Fetch roles: try staff_roles first, then user_roles
-        let userRoles: string[] = [];
-
-        const { data: staffData } = await supabase
+        // 2. Fetch roles from the canonical staff_roles table only.
+        const { data: staffData, error: rolesError } = await supabase
           .from("staff_roles")
           .select("role")
           .eq("user_id", userId);
 
-        if (staffData && staffData.length > 0) {
-          userRoles = staffData.map((r: { role: string }) => r.role);
-        } else {
-          const { data: legacyRoles } = await supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", userId);
-
-          if (legacyRoles && legacyRoles.length > 0) {
-            userRoles = legacyRoles.map((r: { role: string }) => r.role);
-          }
+        if (rolesError) {
+          console.error("Error fetching staff roles:", rolesError.message);
+          setRoles([]);
+          return;
         }
 
-        // 3. Admin auto-check for fathan.pageraji@gmail.com
-        const activeUser = currentUser || userRef.current;
-        const email = activeUser?.email?.toLowerCase().trim();
-        if (email === "fathan.pageraji@gmail.com") {
-          if (!userRoles.includes("admin")) {
-            userRoles.push("admin");
-          }
-          // Attempt server-side sync to database once
-          if (!hasProvisionedAdminRef.current) {
-            hasProvisionedAdminRef.current = true;
-            fetch("/api/auth/provision-admin", { method: "POST" }).catch(() => {});
-          }
-        }
-
+        const userRoles = (staffData || []).map((r: { role: string }) => r.role);
         setRoles(userRoles);
       } catch (err) {
         console.error("Error fetching user profile & roles:", err);
@@ -228,7 +185,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null);
     setProfile(null);
     setRoles([]);
-    hasProvisionedAdminRef.current = false;
   };
 
   // Safe switch account implementation: sign out first, then immediately open login modal
@@ -242,7 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!activeUser) return { error: new Error("Pengguna belum login") };
 
     try {
-      // Try updating canonical user_profiles
+      // Update the canonical user_profiles row only.
       const { error: upError } = await supabase
         .from("user_profiles")
         .update({
@@ -256,19 +212,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
         .eq("user_id", activeUser.id);
 
-      // Fallback for legacy profiles table if present
       if (upError) {
-        await supabase
-          .from("profiles")
-          .update({
-            display_name: updates.display_name,
-            username: updates.username,
-            avatar_path: updates.avatar_path,
-            language: updates.preferred_language,
-            theme: updates.theme,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", activeUser.id);
+        return { error: new Error(upError.message) };
       }
 
       await fetchProfileAndRoles(activeUser.id, activeUser);

@@ -17,6 +17,8 @@ import { ReportCard } from "@/components/reports/ReportCard";
 import { fetchReports, fetchSavedReports, ReportDetailItem } from "@/lib/supabase/reports";
 import { LoadingPattern } from "@/components/ui/patterns/LoadingPattern";
 import { EmptyPattern } from "@/components/ui/patterns/EmptyPattern";
+import { ErrorPattern } from "@/components/ui/patterns/ErrorPattern";
+import { AlertCircle } from "lucide-react";
 
 export default function ProfilePage() {
   const { user, profile, refreshProfile } = useAuth();
@@ -26,18 +28,22 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState(profile?.display_name || "");
   const [bio, setBio] = useState(profile?.bio || "");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [myReports, setMyReports] = useState<ReportDetailItem[]>([]);
   const [savedReports, setSavedReports] = useState<ReportDetailItem[]>([]);
   const [loadingReports, setLoadingReports] = useState(true);
+  const [reportsError, setReportsError] = useState<string | null>(null);
 
   // Sync state
-  useEffect(() => {
-    if (profile) {
-      setDisplayName(profile.display_name || "");
-      setBio(profile.bio || "");
+  const startEditing = () => {
+    if (!isEditing) {
+      setDisplayName(profile?.display_name || "");
+      setBio(profile?.bio || "");
+      setSaveError(null);
     }
-  }, [profile]);
+    setIsEditing(!isEditing);
+  };
 
   const loadData = useCallback(async (isCancelledRef?: { current: boolean }) => {
     const userId = user?.id;
@@ -48,6 +54,7 @@ export default function ProfilePage() {
     }
     if (isCancelledRef?.current) return;
     setLoadingReports(true);
+    setReportsError(null);
 
     try {
       // 1. Fetch user's own reports and saved reports in parallel
@@ -57,6 +64,12 @@ export default function ProfilePage() {
       ]);
 
       if (isCancelledRef?.current) return;
+
+      const firstError = myRes.error || savedRes.error;
+      if (firstError) {
+        setReportsError(firstError.message);
+      }
+
       if (myRes.data) {
         setMyReports(myRes.data);
       }
@@ -64,7 +77,10 @@ export default function ProfilePage() {
         setSavedReports(savedRes.data);
       }
     } catch (err) {
-      console.error("Profile load error:", err);
+      if (isCancelledRef?.current) return;
+      setReportsError(
+        err instanceof Error ? err.message : "Gagal memuat laporan profil"
+      );
     } finally {
       if (isCancelledRef?.current) return;
       setLoadingReports(false);
@@ -83,21 +99,36 @@ export default function ProfilePage() {
     e.preventDefault();
     if (!user) return;
     setSaving(true);
+    setSaveError(null);
+
+    const trimmedName = displayName.trim();
+    if (trimmedName.length < 2 || trimmedName.length > 80) {
+      setSaveError("Nama tampilan harus antara 2 dan 80 karakter.");
+      setSaving(false);
+      return;
+    }
 
     try {
       const supabase = createClient();
-      await supabase
+      const { error } = await supabase
         .from("user_profiles")
         .update({
-          display_name: displayName.trim(),
+          display_name: trimmedName,
           bio: bio.trim(),
+          updated_at: new Date().toISOString(),
         })
         .eq("user_id", user.id);
+
+      if (error) {
+        setSaveError(error.message);
+        setSaving(false);
+        return;
+      }
 
       await refreshProfile();
       setIsEditing(false);
     } catch (err) {
-      console.error(err);
+      setSaveError(err instanceof Error ? err.message : "Gagal menyimpan profil");
     } finally {
       setSaving(false);
     }
@@ -116,11 +147,7 @@ export default function ProfilePage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold text-xl flex items-center justify-center border border-orange-500/20 flex-shrink-0">
-              {profile?.avatar_path ? (
-                <img src={profile.avatar_path} alt="" className="w-full h-full rounded-xl object-cover" />
-              ) : (
-                (profile?.display_name || user?.email || "U").charAt(0).toUpperCase()
-              )}
+              {(profile?.display_name || user?.email || "U").charAt(0).toUpperCase()}
             </div>
 
             <div className="space-y-1">
@@ -147,7 +174,7 @@ export default function ProfilePage() {
           </div>
 
           <button
-            onClick={() => setIsEditing(!isEditing)}
+            onClick={startEditing}
             className="px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 flex items-center gap-1.5 transition-colors"
           >
             <Edit3 className="w-3.5 h-3.5" />
@@ -194,10 +221,17 @@ export default function ProfilePage() {
                 <Save className="w-3.5 h-3.5" />
                 <span>Simpan Perubahan</span>
               </button>
+
+              {saveError && (
+                <p className="text-[11px] text-rose-600 dark:text-rose-400 flex items-start gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <span>{saveError}</span>
+                </p>
+              )}
             </form>
           ) : (
             <p className="text-xs text-zinc-600 dark:text-zinc-400 max-w-2xl leading-relaxed">
-              {profile?.bio || "Peduli sesama warga. Siap membantu mengembalikan barang yang tertinggal."}
+              {profile?.bio?.trim() || "Belum ada bio. Tambahkan deskripsi singkat tentang Anda melalui tombol Sunting Profil."}
             </p>
           )}
         </div>
@@ -234,6 +268,11 @@ export default function ProfilePage() {
         {/* Content */}
         {loadingReports ? (
           <LoadingPattern />
+        ) : reportsError ? (
+          <ErrorPattern
+            message={reportsError}
+            onRetry={() => loadData()}
+          />
         ) : activeTab === "my_reports" ? (
           myReports.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

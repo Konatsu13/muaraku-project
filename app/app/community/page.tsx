@@ -23,13 +23,11 @@ interface DBMessage {
   body: string;
   created_at: string;
   sender_name: string;
-  sender_avatar?: string | null;
-  is_verified_staff?: boolean;
 }
 
 export default function CommunityChatPage() {
   const { user, profile } = useAuth();
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const supabase = React.useMemo(() => createClient(), []);
 
   const [messages, setMessages] = useState<DBMessage[]>([]);
@@ -65,38 +63,72 @@ export default function CommunityChatPage() {
     setErrorMsg(null);
 
     try {
+      // Verify the canonical Global Chat row exists before querying messages.
+      const { data: conversation, error: conversationError } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("id", GLOBAL_CONVERSATION_ID)
+        .eq("kind", "global")
+        .maybeSingle();
+
+      if (conversationError) {
+        setErrorMsg(conversationError.message);
+        setLoading(false);
+        return;
+      }
+
+      if (!conversation) {
+        setErrorMsg(
+          "Ruang Global Chat belum tersedia pada database ini. Hubungi administrator."
+        );
+        setLoading(false);
+        return;
+      }
+
+      // Bounded read: latest 100 messages, then display oldest-first.
       const { data, error } = await supabase
         .from("messages")
-        .select(`
-          id,
-          sender_id,
-          body,
-          created_at,
-          moderation_status,
-          user_profiles:sender_id (
-            display_name,
-            avatar_path
-          )
-        `)
+        .select("id, sender_id, body, created_at, moderation_status")
         .eq("conversation_id", GLOBAL_CONVERSATION_ID)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .limit(100);
 
       if (error) {
         setErrorMsg(error.message);
       } else if (data) {
-        const formatted: DBMessage[] = (data as Array<Record<string, unknown>>).map((m) => {
-          const rawProf = m.user_profiles;
-          const prof = (Array.isArray(rawProf) ? rawProf[0] : rawProf) as { display_name?: string; avatar_path?: string } | null;
-          return {
-            id: String(m.id),
-            sender_id: String(m.sender_id),
-            body: String(m.body || ""),
-            created_at: String(m.created_at),
-            sender_name: prof?.display_name || "Warga MuaraKu",
-            sender_avatar: prof?.avatar_path || null,
-            is_verified_staff: false,
-          };
-        });
+        const rows = [...(data as Array<Record<string, unknown>>)].reverse();
+        const senderIds = Array.from(new Set(rows.map((m) => String(m.sender_id))));
+
+        const { data: profiles, error: profileError } = senderIds.length
+          ? await supabase
+              .from("user_profiles")
+              .select("user_id, display_name")
+              .in("user_id", senderIds)
+          : { data: [], error: null };
+
+        if (profileError) {
+          setErrorMsg(profileError.message);
+          setLoading(false);
+          return;
+        }
+
+        const nameMap = new Map<string, string>();
+        for (const profile of (profiles || []) as Array<{
+          user_id: string;
+          display_name: string | null;
+        }>) {
+          if (profile.display_name?.trim()) {
+            nameMap.set(profile.user_id, profile.display_name.trim());
+          }
+        }
+
+        const formatted: DBMessage[] = rows.map((m) => ({
+          id: String(m.id),
+          sender_id: String(m.sender_id),
+          body: String(m.body || ""),
+          created_at: String(m.created_at),
+          sender_name: nameMap.get(String(m.sender_id)) || "Warga MuaraKu",
+        }));
         setMessages(formatted);
       }
     } catch (err: unknown) {
@@ -144,7 +176,7 @@ export default function CommunityChatPage() {
           // Fetch sender profile
           const { data: profData } = await supabase
             .from("user_profiles")
-            .select("display_name, avatar_path")
+            .select("display_name")
             .eq("user_id", newMsg.sender_id)
             .maybeSingle();
 
@@ -154,8 +186,6 @@ export default function CommunityChatPage() {
             body: newMsg.body,
             created_at: newMsg.created_at,
             sender_name: profData?.display_name || "Warga MuaraKu",
-            sender_avatar: profData?.avatar_path || null,
-            is_verified_staff: false,
           };
 
           setMessages((prev) => {
@@ -186,6 +216,10 @@ export default function CommunityChatPage() {
     }
 
     const textToSend = inputText.trim();
+    if (textToSend.length > 5000) {
+      setErrorMsg("Pesan maksimal 5000 karakter.");
+      return;
+    }
     setInputText("");
     setSending(true);
 
@@ -197,9 +231,8 @@ export default function CommunityChatPage() {
           sender_id: user.id,
           body: textToSend,
           message_kind: "text",
-          moderation_status: "approved",
         })
-        .select()
+        .select("id, created_at")
         .single();
 
       if (error) {
@@ -212,7 +245,6 @@ export default function CommunityChatPage() {
           body: textToSend,
           created_at: data.created_at,
           sender_name: profile?.display_name || "Anda",
-          sender_avatar: profile?.avatar_path || null,
         };
 
         setMessages((prev) => {
@@ -248,9 +280,8 @@ export default function CommunityChatPage() {
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-50 tracking-tight flex items-center gap-2">
+            <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-50 tracking-tight">
               <span>{t.community.title}</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             </h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               {t.community.subtitle}
@@ -259,7 +290,7 @@ export default function CommunityChatPage() {
         </div>
 
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-          Reset Harian 00:00 WIB
+          Ruang publik
         </span>
       </div>
 
@@ -315,11 +346,7 @@ export default function CommunityChatPage() {
                 {/* Other user's avatar */}
                 {!isOwn && (
                   <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-700 dark:text-zinc-300 flex-shrink-0 mt-1">
-                    {msg.sender_avatar ? (
-                      <img src={msg.sender_avatar} alt="" className="w-full h-full rounded-full object-cover" />
-                    ) : (
-                      msg.sender_name.charAt(0).toUpperCase()
-                    )}
+                    {msg.sender_name.charAt(0).toUpperCase()}
                   </div>
                 )}
 
@@ -331,11 +358,6 @@ export default function CommunityChatPage() {
                       <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200">
                         {msg.sender_name}
                       </span>
-                      {msg.is_verified_staff && (
-                        <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                          Petugas
-                        </span>
-                      )}
                     </div>
                   )}
 
@@ -380,10 +402,10 @@ export default function CommunityChatPage() {
               <MessageSquare className="w-6 h-6" />
             </div>
             <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">
-              Belum Ada Pesan Hari Ini
+              Belum ada pesan
             </h3>
             <p className="text-xs text-zinc-500 max-w-sm leading-relaxed">
-              Global Chat dibersihkan otomatis setiap pergantian hari. Sapa warga atau tanyakan info barang tertinggal dengan santun.
+              Belum ada pesan di Global Chat. Sapa warga atau tanyakan info barang tertinggal dengan santun.
             </p>
           </div>
         )}

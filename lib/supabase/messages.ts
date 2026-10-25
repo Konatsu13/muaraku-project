@@ -17,6 +17,7 @@ export interface ConversationSummary {
   title: string | null;
   context_report_id: string | null;
   context_report_title: string | null;
+  partner_user_id: string | null;
   partner_name: string;
   partner_avatar: string | null;
   last_message: string | null;
@@ -232,6 +233,7 @@ export async function fetchConversations(): Promise<{
           context_report_title: conversation.context_report_id
             ? reportTitleMap.get(conversation.context_report_id) || null
             : null,
+          partner_user_id: partnerId,
           partner_name: partnerName,
           partner_avatar: partnerProfile?.avatar_path || null,
           last_message: latest
@@ -400,5 +402,148 @@ export async function sendConversationMessage(
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error("Gagal mengirim pesan");
     return { data: null, error };
+  }
+}
+
+/**
+ * Create or reuse a direct conversation through the schema's controlled RPC.
+ * The client never inserts into `conversations` or `conversation_members`
+ * directly; membership, block checks and active-account checks live in SQL.
+ */
+export async function createDirectConversation(
+  otherUserId: string,
+  contextReportId: string | null = null
+): Promise<{ conversationId: string | null; error: Error | null }> {
+  if (!otherUserId) {
+    return { conversationId: null, error: new Error("Pengguna tujuan tidak valid") };
+  }
+
+  const supabase = createClient();
+
+  try {
+    const { data, error } = await supabase.rpc("muaraku_create_direct_conversation", {
+      other_user_id: otherUserId,
+      context_report_id: contextReportId,
+    });
+
+    if (error || !data) {
+      return {
+        conversationId: null,
+        error: new Error(error?.message || "Percakapan tidak dapat dibuat"),
+      };
+    }
+
+    return { conversationId: String(data), error: null };
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error("Percakapan tidak dapat dibuat");
+    return { conversationId: null, error };
+  }
+}
+
+/**
+ * Rows are only readable where blocker_user_id = auth.uid(), so this returns
+ * the users the current account has blocked (not who blocked them).
+ */
+export async function fetchBlockedUserIds(): Promise<{
+  data: Set<string>;
+  error: Error | null;
+}> {
+  const supabase = createClient();
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { data: new Set<string>(), error: new Error("Sesi pengguna tidak ditemukan.") };
+    }
+
+    const { data, error } = await supabase
+      .from("user_blocks")
+      .select("blocked_user_id")
+      .eq("blocker_user_id", user.id);
+
+    if (error) {
+      return { data: new Set<string>(), error: new Error(error.message) };
+    }
+
+    const ids = new Set<string>(
+      ((data || []) as Array<{ blocked_user_id: string }>).map((row) => row.blocked_user_id)
+    );
+
+    return { data: ids, error: null };
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error("Gagal memuat daftar blokir");
+    return { data: new Set<string>(), error };
+  }
+}
+
+export async function blockUser(
+  blockedUserId: string,
+  reason?: string
+): Promise<{ success: boolean; error: Error | null }> {
+  const supabase = createClient();
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: new Error("Sesi pengguna tidak ditemukan.") };
+    }
+
+    if (user.id === blockedUserId) {
+      return { success: false, error: new Error("Anda tidak dapat memblokir diri sendiri.") };
+    }
+
+    const trimmedReason = reason?.trim() || null;
+
+    const { error } = await supabase.from("user_blocks").insert({
+      blocker_user_id: user.id,
+      blocked_user_id: blockedUserId,
+      reason: trimmedReason,
+    });
+
+    if (error) {
+      return { success: false, error: new Error(error.message) };
+    }
+
+    return { success: true, error: null };
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error("Gagal memblokir pengguna");
+    return { success: false, error };
+  }
+}
+
+export async function unblockUser(
+  blockedUserId: string
+): Promise<{ success: boolean; error: Error | null }> {
+  const supabase = createClient();
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: new Error("Sesi pengguna tidak ditemukan.") };
+    }
+
+    const { error } = await supabase
+      .from("user_blocks")
+      .delete()
+      .eq("blocker_user_id", user.id)
+      .eq("blocked_user_id", blockedUserId);
+
+    if (error) {
+      return { success: false, error: new Error(error.message) };
+    }
+
+    return { success: true, error: null };
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error("Gagal membuka blokir pengguna");
+    return { success: false, error };
   }
 }

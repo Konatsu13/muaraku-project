@@ -4,13 +4,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import {
   X,
-  Plus,
   Lock,
   Upload,
   AlertCircle,
   Loader2,
-  Image as ImageIcon,
   CheckCircle2,
+  PackageSearch,
+  PackageCheck,
 } from "lucide-react";
 import {
   createReport,
@@ -20,6 +20,14 @@ import {
   ReportDetailItem,
   CreateReportInput,
 } from "@/lib/supabase/reports";
+import { buildOccurredAt, splitOccurredAt } from "@/lib/reports/occurred-at";
+
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_FILE_SIZE = 8 * 1024 * 1024;
+
+type FieldErrors = Partial<
+  Record<"title" | "category_id" | "occurred_date" | "location_label" | "city" | "description", string>
+>;
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -39,20 +47,26 @@ export function ReportModal({
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // `report_type` is fixed by the page context (or the report being edited).
+  // It is never user-switchable inside the form.
+  const reportType: "lost" | "found" = editReport ? editReport.report_type : defaultType;
+
   const [categories, setCategories] = useState<ReportCategory[]>([]);
-  const [reportType, setReportType] = useState<"lost" | "found">(
-    editReport ? editReport.report_type : defaultType
-  );
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+
   const [title, setTitle] = useState(editReport?.title || "");
   const [description, setDescription] = useState(editReport?.description || "");
   const [categoryId, setCategoryId] = useState<string>(editReport?.category_id || "");
+
+  const initialOccurred = splitOccurredAt(
+    editReport?.occurred_at,
+    editReport?.item_attributes
+  );
+  const [occurredDate, setOccurredDate] = useState(initialOccurred.date);
+  const [occurredTime, setOccurredTime] = useState(initialOccurred.time);
+
   const [locationLabel, setLocationLabel] = useState(editReport?.location_label || "");
   const [city, setCity] = useState(editReport?.city || "");
-  const [occurredAt, setOccurredAt] = useState(
-    editReport?.occurred_at
-      ? new Date(editReport.occurred_at).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16)
-  );
   const [color, setColor] = useState(editReport?.color || "");
   const [brand, setBrand] = useState(editReport?.brand || "");
   const [model, setModel] = useState(editReport?.model || "");
@@ -75,23 +89,24 @@ export function ReportModal({
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   // Load categories when modal is opened
   useEffect(() => {
     if (!isOpen) return;
     let mounted = true;
     fetchCategories().then((res) => {
-      if (mounted && res.data) {
-        setCategories(res.data);
-        if (!editReport && res.data.length > 0) {
-          setCategoryId((curr) => curr || res.data[0].id);
-        }
+      if (!mounted) return;
+      if (res.error) {
+        setCategoriesError(res.error.message);
+        return;
       }
+      setCategories(res.data || []);
     });
     return () => {
       mounted = false;
     };
-  }, [isOpen, editReport]);
+  }, [isOpen]);
 
   const previewUrlsRef = useRef<string[]>([]);
   useEffect(() => {
@@ -115,36 +130,38 @@ export function ReportModal({
   // Sync editReport state if provided
   useEffect(() => {
     if (editReport) {
-      setReportType(editReport.report_type);
       setTitle(editReport.title);
       setDescription(editReport.description);
       setCategoryId(editReport.category_id || "");
       setLocationLabel(editReport.location_label || "");
       setCity(editReport.city || "");
-      setOccurredAt(
-        editReport.occurred_at
-          ? new Date(editReport.occurred_at).toISOString().slice(0, 16)
-          : new Date().toISOString().slice(0, 16)
-      );
+      const parts = splitOccurredAt(editReport.occurred_at, editReport.item_attributes);
+      setOccurredDate(parts.date);
+      setOccurredTime(parts.time);
       setColor(editReport.color || "");
       setBrand(editReport.brand || "");
       setModel(editReport.model || "");
       setOwnerOnlyClues(editReport.private_details?.owner_only_clues || "");
       setPrivateContact(editReport.private_details?.private_contact || "");
       setContactPreference(editReport.private_details?.contact_preference || "in_app");
-    } else {
-      setReportType(defaultType);
     }
-  }, [editReport, defaultType]);
+  }, [editReport]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
+    setErrorMsg(null);
 
     const validFiles: File[] = [];
     for (const f of files) {
-      if (f.size > 8388608) {
-        setErrorMsg(`Berkas "${f.name}" melebihi ukuran batas 8MB`);
+      if (!ALLOWED_IMAGE_TYPES.includes(f.type)) {
+        setErrorMsg(`Berkas "${f.name}" harus berformat JPG, PNG, atau WEBP.`);
+        e.target.value = "";
+        return;
+      }
+      if (f.size > MAX_FILE_SIZE) {
+        setErrorMsg(`Berkas "${f.name}" melebihi ukuran batas 8MB.`);
+        e.target.value = "";
         return;
       }
       validFiles.push(f);
@@ -153,6 +170,7 @@ export function ReportModal({
     setSelectedFiles((prev) => [...prev, ...validFiles]);
     const newPreviews = validFiles.map((f) => URL.createObjectURL(f));
     setPreviewUrls((prev) => [...prev, ...newPreviews]);
+    e.target.value = "";
   };
 
   const handleRemoveFile = (index: number) => {
@@ -163,25 +181,67 @@ export function ReportModal({
     });
   };
 
+  const validate = (): FieldErrors => {
+    const errors: FieldErrors = {};
+    const trimmedTitle = title.trim();
+    const trimmedDesc = description.trim();
+
+    if (trimmedTitle.length < 3 || trimmedTitle.length > 140) {
+      errors.title = "Judul harus antara 3 dan 140 karakter.";
+    }
+    if (!categoryId) {
+      errors.category_id = "Pilih kategori barang.";
+    }
+    if (!occurredDate) {
+      errors.occurred_date = "Tanggal kejadian wajib diisi.";
+    }
+    if (!locationLabel.trim()) {
+      errors.location_label = "Lokasi kejadian wajib diisi.";
+    } else if (locationLabel.trim().length > 200) {
+      errors.location_label = "Lokasi maksimal 200 karakter.";
+    }
+    if (!city.trim()) {
+      errors.city = "Kota wajib diisi.";
+    } else if (city.trim().length > 100) {
+      errors.city = "Kota maksimal 100 karakter.";
+    }
+    if (trimmedDesc.length < 5 || trimmedDesc.length > 5000) {
+      errors.description = "Deskripsi harus antara 5 dan 5000 karakter.";
+    }
+
+    return errors;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
 
     if (!user) {
-      setErrorMsg("Anda harus masuk terlebih dahulu untuk membuat atau mengubah laporan");
+      setErrorMsg("Anda harus masuk terlebih dahulu untuk membuat atau mengubah laporan.");
       return;
     }
 
-    if (title.trim().length < 3 || title.trim().length > 140) {
-      setErrorMsg("Judul harus antara 3 dan 140 karakter");
+    const errors = validate();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setErrorMsg("Periksa kembali kolom yang ditandai sebelum melanjutkan.");
       return;
     }
 
-    if (description.trim().length < 5 || description.trim().length > 5000) {
-      setErrorMsg("Deskripsi harus antara 5 dan 5000 karakter");
+    const occurred = buildOccurredAt(occurredDate, occurredTime);
+    if ("error" in occurred) {
+      setFieldErrors({ occurred_date: occurred.error });
+      setErrorMsg(occurred.error);
       return;
     }
+
+    // Preserve any unrelated item attributes already stored on the report and
+    // only overwrite the occurrence-precision marker.
+    const itemAttributes: Record<string, unknown> = {
+      ...(editReport?.item_attributes || {}),
+      ...occurred.attributes,
+    };
 
     setLoading(true);
 
@@ -193,10 +253,11 @@ export function ReportModal({
           {
             title: title.trim(),
             description: description.trim(),
-            category_id: categoryId || null,
-            location_label: locationLabel.trim() || null,
-            city: city.trim() || null,
-            occurred_at: new Date(occurredAt).toISOString(),
+            category_id: categoryId,
+            location_label: locationLabel.trim(),
+            city: city.trim(),
+            occurred_at: occurred.occurred_at,
+            item_attributes: itemAttributes,
             color: color.trim() || null,
             brand: brand.trim() || null,
             model: model.trim() || null,
@@ -212,16 +273,17 @@ export function ReportModal({
           throw new Error(res.error?.message || "Gagal memperbarui laporan");
         }
 
-        setSuccessMsg("Laporan berhasil diperbarui");
+        setSuccessMsg("Laporan berhasil diperbarui.");
         if (onSuccess) {
           onSuccess({
             ...editReport,
             title: title.trim(),
             description: description.trim(),
-            category_id: categoryId || null,
-            location_label: locationLabel.trim() || null,
-            city: city.trim() || null,
-            occurred_at: new Date(occurredAt).toISOString(),
+            category_id: categoryId,
+            location_label: locationLabel.trim(),
+            city: city.trim(),
+            occurred_at: occurred.occurred_at,
+            item_attributes: itemAttributes,
             color: color.trim() || null,
             brand: brand.trim() || null,
             model: model.trim() || null,
@@ -233,10 +295,11 @@ export function ReportModal({
           report_type: reportType,
           title: title.trim(),
           description: description.trim(),
-          category_id: categoryId || null,
-          location_label: locationLabel.trim() || null,
-          city: city.trim() || null,
-          occurred_at: new Date(occurredAt).toISOString(),
+          category_id: categoryId,
+          location_label: locationLabel.trim(),
+          city: city.trim(),
+          occurred_at: occurred.occurred_at,
+          item_attributes: itemAttributes,
           color: color.trim() || null,
           brand: brand.trim() || null,
           model: model.trim() || null,
@@ -251,9 +314,7 @@ export function ReportModal({
           throw new Error(res.error?.message || "Gagal membuat laporan");
         }
 
-        setSuccessMsg(
-          "Laporan berhasil dibuat dan sedang menunggu peninjauan moderator."
-        );
+        setSuccessMsg("Laporan berhasil dibuat dan sedang menunggu peninjauan moderator.");
         if (onSuccess) {
           onSuccess(res.data);
         }
@@ -271,6 +332,20 @@ export function ReportModal({
   };
 
   if (!isOpen) return null;
+
+  const inputClass = (hasError: boolean) =>
+    `w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 ${
+      hasError
+        ? "border-rose-400 dark:border-rose-700"
+        : "border-zinc-200 dark:border-zinc-800"
+    }`;
+
+  const fieldError = (key: keyof FieldErrors) =>
+    fieldErrors[key] ? (
+      <span className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 block">
+        {fieldErrors[key]}
+      </span>
+    ) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-xs animate-fade-in">
@@ -302,7 +377,7 @@ export function ReportModal({
         </div>
 
         {/* Modal Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+        <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
           {errorMsg && (
             <div className="p-3.5 rounded-xl text-xs bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -317,33 +392,21 @@ export function ReportModal({
             </div>
           )}
 
-          {/* Type Toggle (Disabled during edit) */}
-          {!editReport && (
-            <div className="flex rounded-xl bg-zinc-100 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800">
-              <button
-                type="button"
-                onClick={() => setReportType("lost")}
-                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
-                  reportType === "lost"
-                    ? "bg-white dark:bg-zinc-800 text-rose-600 dark:text-rose-400 shadow-xs"
-                    : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
-                }`}
-              >
-                Barang Hilang (Lost)
-              </button>
-              <button
-                type="button"
-                onClick={() => setReportType("found")}
-                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
-                  reportType === "found"
-                    ? "bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs"
-                    : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
-                }`}
-              >
-                Barang Ditemukan (Found)
-              </button>
-            </div>
-          )}
+          {/* Fixed report type indicator */}
+          <div className="flex items-center gap-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3 py-2.5">
+            {reportType === "lost" ? (
+              <PackageSearch className="w-4 h-4 text-rose-500 flex-shrink-0" />
+            ) : (
+              <PackageCheck className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+            )}
+            <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+              Jenis laporan:{" "}
+              <strong className="text-zinc-900 dark:text-zinc-100">
+                {reportType === "lost" ? "Barang Hilang" : "Barang Ditemukan"}
+              </strong>
+              . Jenis ditentukan oleh halaman tempat laporan dibuat.
+            </p>
+          </div>
 
           {/* Title */}
           <div>
@@ -358,21 +421,26 @@ export function ReportModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Contoh: Dompet Kulit Coklat merk Bifold"
-              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500"
+              aria-invalid={Boolean(fieldErrors.title)}
+              className={inputClass(Boolean(fieldErrors.title))}
             />
-            <span className="text-[10px] text-zinc-400 mt-1 block">3 - 140 karakter</span>
+            {fieldError("title") || (
+              <span className="text-[10px] text-zinc-400 mt-1 block">3 - 140 karakter</span>
+            )}
           </div>
 
-          {/* Category & Date Row */}
+          {/* Category & Occurred At Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Kategori
+                Kategori <span className="text-rose-500">*</span>
               </label>
               <select
+                required
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                aria-invalid={Boolean(fieldErrors.category_id)}
+                className={inputClass(Boolean(fieldErrors.category_id))}
               >
                 <option value="">Pilih Kategori</option>
                 {categories.map((c) => (
@@ -381,18 +449,46 @@ export function ReportModal({
                   </option>
                 ))}
               </select>
+              {fieldError("category_id")}
+              {categoriesError && (
+                <span className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 block">
+                  Gagal memuat kategori: {categoriesError}
+                </span>
+              )}
+              {!categoriesError && categories.length === 0 && (
+                <span className="text-[10px] text-zinc-400 mt-1 block">
+                  Daftar kategori belum tersedia.
+                </span>
+              )}
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Waktu Kejadian
-              </label>
-              <input
-                type="datetime-local"
-                value={occurredAt}
-                onChange={(e) => setOccurredAt(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
-              />
+            <div className="space-y-2">
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Tanggal Kejadian <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={occurredDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setOccurredDate(e.target.value)}
+                  aria-invalid={Boolean(fieldErrors.occurred_date)}
+                  className={inputClass(Boolean(fieldErrors.occurred_date))}
+                />
+                {fieldError("occurred_date")}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Waktu <span className="text-zinc-400 font-normal">(opsional)</span>
+                </label>
+                <input
+                  type="time"
+                  value={occurredTime}
+                  onChange={(e) => setOccurredTime(e.target.value)}
+                  className={inputClass(false)}
+                />
+              </div>
             </div>
           </div>
 
@@ -400,30 +496,36 @@ export function ReportModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Lokasi Spesifik / Tempat
+                Lokasi Spesifik / Tempat <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
+                required
                 maxLength={200}
                 value={locationLabel}
                 onChange={(e) => setLocationLabel(e.target.value)}
                 placeholder="Contoh: Stasiun Gambir Gate 2"
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                aria-invalid={Boolean(fieldErrors.location_label)}
+                className={inputClass(Boolean(fieldErrors.location_label))}
               />
+              {fieldError("location_label")}
             </div>
 
             <div>
               <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Kota
+                Kota <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
+                required
                 maxLength={100}
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
                 placeholder="Contoh: Jakarta Pusat"
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                aria-invalid={Boolean(fieldErrors.city)}
+                className={inputClass(Boolean(fieldErrors.city))}
               />
+              {fieldError("city")}
             </div>
           </div>
 
@@ -431,38 +533,38 @@ export function ReportModal({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Warna
+                Warna <span className="text-zinc-400 font-normal">(opsional)</span>
               </label>
               <input
                 type="text"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
                 placeholder="Misal: Cokelat tua"
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100"
+                className={inputClass(false)}
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Merek / Brand
+                Merek / Brand <span className="text-zinc-400 font-normal">(opsional)</span>
               </label>
               <input
                 type="text"
                 value={brand}
                 onChange={(e) => setBrand(e.target.value)}
                 placeholder="Misal: Fossil"
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100"
+                className={inputClass(false)}
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Model / Seri
+                Model / Seri <span className="text-zinc-400 font-normal">(opsional)</span>
               </label>
               <input
                 type="text"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
                 placeholder="Misal: Derrick RFID"
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100"
+                className={inputClass(false)}
               />
             </div>
           </div>
@@ -480,15 +582,21 @@ export function ReportModal({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Jelaskan ciri umum barang yang dapat dilihat oleh publik..."
-              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              aria-invalid={Boolean(fieldErrors.description)}
+              className={inputClass(Boolean(fieldErrors.description))}
             />
+            {fieldError("description") || (
+              <span className="text-[10px] text-zinc-400 mt-1 block">
+                Jangan tulis ciri rahasia atau kontak pribadi di sini.
+              </span>
+            )}
           </div>
 
           {/* Photo Upload Area */}
           {!editReport && (
             <div>
               <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Foto Barang (Maksimal 8MB / foto)
+                Foto Barang <span className="text-zinc-400 font-normal">(opsional, maks. 8MB/foto)</span>
               </label>
               <input
                 type="file"
@@ -540,7 +648,7 @@ export function ReportModal({
               </h3>
             </div>
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-3 leading-relaxed">
-              Informasi di bawah ini dilindungi enkripsi RLS dan hanya dapat dilihat oleh Anda serta diverifikasi saat proses klaim. Informasi ini <strong>tidak akan</strong> muncul pada feed atau pencarian publik.
+              Informasi di bawah ini hanya dapat dilihat oleh Anda dan moderator saat proses klaim. Informasi ini <strong>tidak akan</strong> muncul pada feed atau pencarian publik.
             </p>
 
             <div className="space-y-3">
@@ -554,7 +662,7 @@ export function ReportModal({
                   value={ownerOnlyClues}
                   onChange={(e) => setOwnerOnlyClues(e.target.value)}
                   placeholder="Misal: Nomor seri tersembunyi, foto di balik case, goresan di sudut kiri..."
-                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  className={inputClass(false)}
                 />
               </div>
 
@@ -566,7 +674,7 @@ export function ReportModal({
                   <select
                     value={contactPreference}
                     onChange={(e) => setContactPreference(e.target.value as "in_app" | "email" | "other")}
-                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100"
+                    className={inputClass(false)}
                   >
                     <option value="in_app">Melalui Pesan Aplikasi (MuaraKu Chat)</option>
                     <option value="email">Melalui Email</option>
@@ -584,7 +692,7 @@ export function ReportModal({
                     value={privateContact}
                     onChange={(e) => setPrivateContact(e.target.value)}
                     placeholder="Misal: nomor WhatsApp atau Telegram"
-                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100"
+                    className={inputClass(false)}
                   />
                 </div>
               </div>
